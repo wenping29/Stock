@@ -1,0 +1,63 @@
+
+> stock-analyzer-server@1.0.0 dev
+> tsx watch src/index.ts
+
+Server running on http://localhost:3001
+Realtime quotes server running on http://localhost:3002
+[monitor] Loaded 0 monitoring jobs
+fetchClistItems: got 5894/5894 items
+[realtime] refreshed 5894 quotes in 129591ms
+[cache] Loaded 945 entries, cleaned 4 expired from disk
+[cache] Loaded 945 entries, cleaned 4 expired from disk
+fetchClistItems: got 5894/5894 items
+[realtime] refreshed 5894 quotes in 156203ms
+fetchClistItems: got 5894/5894 items
+[realtime] refreshed 5894 quotes in 130113ms
+fetchClistItems: got 5894/5894 items
+[realtime] refreshed 5894 quotes in 129941ms
+fetchClistItems: got 5894/5894 items
+[realtime] refreshed 5894 quotes in 129931ms
+fetchClistItems: got 5894/5894 items
+[realtime] refreshed 5894 quotes in 143460ms
+fetchClistItems: got 5894/5894 items
+[realtime] refreshed 5894 quotes in 129800ms
+fetchClistItems: got 5894/5894 items
+[realtime] refreshed 5894 quotes in 129818ms
+fetchClistItems: got 5894/5894 items
+[realtime] refreshed 5894 quotes in 134563ms
+fetchClistItems: got 5894/5894 items
+[realtime] refreshed 5894 quotes in 129298ms
+fetchClistItems: got 5894/5894 items
+[realtime] refreshed 5894 quotes in 142988ms
+fetchClistItems: got 5894/5894 items
+[realtime] refreshed 5894 quotes in 129334ms
+fetchClistItems: got 5894/5894 items
+[realtime] refreshed 5894 quotes in 135742ms
+fetchClistItems: got 5894/5894 items
+[realtime] refreshed 5894 quotes in 129949ms
+fetchClistItems: got 5894/5894 items
+[realtime] refreshed 5894 quotes in 130364ms
+fetchClistItems: got 5894/5894 items
+[realtime] refreshed 5894 quotes in 129776ms
+fetchClistItems: got 5894/5894 items
+[realtime] refreshed 5894 quotes in 135517ms
+fetchClistItems: got 5894/5894 items
+[realtime] refreshed 5894 quotes in 130002ms
+fetchClistItems: got 5894/5894 items
+[realtime] refreshed 5894 quotes in 129498ms
+fetchClistItems: got 5894/5894 items
+[realtime] refreshed 5894 quotes in 143026ms
+fetchClistItems: got 5894/5894 items
+[realtime] refreshed 5894 quotes in 129493ms
+fetchClistItems: got 5894/5894 items
+[realtime] refreshed 5894 quotes in 130068ms
+fetchClistItems: got 5894/5894 items
+[realtime] refreshed 5894 quotes in 129930ms
+fetchClistItems: got 5894/5894 items
+[realtime] refreshed 5894 quotes in 129655ms
+fetchClistItems: got 5894/5894 items
+[realtime] refreshed 5894 quotes in 129484ms
+fetchClistItems: got 5894/5894 items
+[realtime] refreshed 5894 quotes in 130045ms
+fetchClistItems: got 100/5894 items
+[realtime] refreshed 100 quotes in 19230ms

@@ -1,0 +1,178 @@
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+fetchClistItems: https://push2.eastmoney.com page 1 failed — socket hang up, trying next host
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+fetchClistItems: https://push2.eastmoney.com page 9 failed — socket hang up, trying next host
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+[fetcher] capital flow failed for sh000905: socket hang up
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+[fetcher] capital flow failed for sh000688: socket hang up
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+fetchClistItems: https://push2.eastmoney.com page 1 failed — socket hang up, trying next host
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+fetchClistItems: https://push2.eastmoney.com page 1 failed — socket hang up, trying next host
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+fetchClistItems: https://push2.eastmoney.com page 1 failed — socket hang up, trying next host
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+fetchClistItems: https://push2.eastmoney.com page 5 failed — socket hang up, trying next host
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+fetchClistItems: https://push2.eastmoney.com page 1 failed — socket hang up, trying next host
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+fetchClistItems: https://push2.eastmoney.com page 1 failed — socket hang up, trying next host
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+fetchClistItems: https://push2.eastmoney.com page 8 failed — socket hang up, trying next host
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+fetchClistItems: https://push2.eastmoney.com page 1 failed — socket hang up, trying next host
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+fetchClistItems: https://push2.eastmoney.com page 8 failed — socket hang up, trying next host
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+fetchClistItems: https://push2.eastmoney.com page 1 failed — socket hang up, trying next host
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+fetchClistItems: https://push2.eastmoney.com page 8 failed — socket hang up, trying next host
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+fetchClistItems: https://push2.eastmoney.com page 1 failed — socket hang up, trying next host
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+fetchClistItems: https://push2.eastmoney.com page 8 failed — socket hang up, trying next host
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+fetchClistItems: https://push2.eastmoney.com page 1 failed — socket hang up, trying next host
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+fetchClistItems: https://push2.eastmoney.com page 9 failed — socket hang up, trying next host
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+fetchClistItems: https://push2.eastmoney.com page 1 failed — socket hang up, trying next host
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+fetchClistItems: https://push2.eastmoney.com page 1 failed — socket hang up, trying next host
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+fetchClistItems: https://push2.eastmoney.com page 7 failed — socket hang up, trying next host
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+fetchClistItems: https://push2.eastmoney.com page 1 failed — socket hang up, trying next host
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+fetchClistItems: https://push2.eastmoney.com page 1 failed — socket hang up, trying next host
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+fetchClistItems: https://push2.eastmoney.com page 1 failed — socket hang up, trying next host
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+fetchClistItems: https://push2.eastmoney.com page 1 failed — socket hang up, trying next host
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+fetchClistItems: https://push2.eastmoney.com page 1 failed — socket hang up, trying next host
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+fetchClistItems: https://push2.eastmoney.com page 1 failed — socket hang up, trying next host
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+fetchClistItems: https://push2.eastmoney.com page 1 failed — socket hang up, trying next host
+fetchClistItems: https://push2delay.eastmoney.com page 1 failed — Request failed with status code 503, trying next host
+fetchClistItems: https://push2delay.eastmoney.com page 2 failed — Request failed with status code 503, trying next host
+fetchClistItems: https://push2delay.eastmoney.com page 4 failed — Request failed with status code 503, trying next host
+fetchClistItems: 3 consecutive empty pages, stopping
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+[fetcher] capital flow failed for sh000001: socket hang up
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+[fetcher] capital flow failed for sz399001: socket hang up
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+[fetcher] capital flow failed for sz399006: socket hang up
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+fetchClistItems: https://push2.eastmoney.com page 1 failed — socket hang up, trying next host
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+[fetcher] capital flow failed for sh000300: socket hang up
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms
+[fetcher] capital flow failed for sh000016: socket hang up
+[fetcher] ECONNRESET — retry 1/3 after 2000ms
+[fetcher] ECONNRESET — retry 2/3 after 4000ms
+[fetcher] ECONNRESET — retry 3/3 after 8000ms

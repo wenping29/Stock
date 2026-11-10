@@ -13,9 +13,10 @@ QuantitativeTrading/server/node_modules/
 
 
 stock-analyzer/client/node_modules/
-stock-analyzer/path/node_modules/
+stock-analyzer/patch/node_modules/
 stock-analyzer/scraper/node_modules/
 stock-analyzer/server/node_modules/
+stock-analyzer/server/dist/
 stock-analyzer/shared/node_modules/
 
 
