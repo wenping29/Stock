@@ -1,0 +1,930 @@
+import * as fs from "fs";
+import * as path from "path";
+import initSqlJs, { Database as SqlJsDatabase, Statement, SqlJsStatic } from "sql.js";
+import type { KlineData, Trade, BacktestResult, ScreeningResult, MonitorJob, StockInfo } from "@shared/types";
+
+const DB_PATH = path.join(__dirname, "../../data/stock_data.db");
+
+interface DbTrade {
+  backtest_id: string;
+  code: string;
+  entry_date: string;
+  entry_price: number;
+  exit_date: string;
+  exit_price: number;
+  shares: number;
+  pnl: number;
+  pnl_pct: number;
+  exit_reason: string;
+}
+
+class StockDatabase {
+  private db: SqlJsDatabase | null = null;
+  private sql: SqlJsStatic | null = null;
+
+  async init(): Promise<void> {
+    if (this.db) return;
+
+    this.sql = await initSqlJs();
+    const dir = path.dirname(DB_PATH);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+    if (fs.existsSync(DB_PATH)) {
+      const buffer = fs.readFileSync(DB_PATH);
+      this.db = new this.sql.Database(buffer);
+    } else {
+      this.db = new this.sql.Database();
+    }
+
+    this.db.run("PRAGMA journal_mode = WAL");
+    this.db.run("PRAGMA foreign_keys = ON");
+    this.createTables();
+  }
+
+  private createTables(): void {
+    if (!this.db) return;
+
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS kline_data (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        code TEXT NOT NULL,
+        period TEXT NOT NULL DEFAULT 'daily',
+        date TEXT NOT NULL,
+        open REAL, high REAL, low REAL, close REAL,
+        volume REAL, amount REAL,
+        UNIQUE(code, period, date)
+      )
+    `);
+    this.db.run("CREATE INDEX IF NOT EXISTS idx_kline_code_period ON kline_data(code, period)");
+    this.db.run("CREATE INDEX IF NOT EXISTS idx_kline_date ON kline_data(date)");
+
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS backtest_results (
+        id TEXT PRIMARY KEY,
+        name TEXT,
+        config TEXT,
+        metrics TEXT,
+        equity_curve TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      )
+    `);
+
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS trades (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        backtest_id TEXT REFERENCES backtest_results(id),
+        code TEXT,
+        entry_date TEXT,
+        entry_price REAL,
+        exit_date TEXT,
+        exit_price REAL,
+        shares INTEGER,
+        pnl REAL,
+        pnl_pct REAL,
+        exit_reason TEXT
+      )
+    `);
+
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS screening_results (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        run_id TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        code TEXT,
+        name TEXT,
+        close REAL,
+        change_pct REAL
+      )
+    `);
+
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS monitor_jobs (
+        id TEXT PRIMARY KEY,
+        name TEXT,
+        config TEXT,
+        enabled INTEGER DEFAULT 1,
+        created_at TEXT DEFAULT (datetime('now'))
+      )
+    `);
+
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS monitoring_results (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_id TEXT REFERENCES monitor_jobs(id),
+        run_at TEXT DEFAULT (datetime('now')),
+        entry_signals TEXT,
+        exit_signals TEXT
+      )
+    `);
+
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS stock_list (
+        code TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        market TEXT,
+        industry TEXT,
+        updated_at TEXT DEFAULT (datetime('now'))
+      )
+    `);
+    this.db.run("CREATE INDEX IF NOT EXISTS idx_stock_list_market ON stock_list(market)");
+    this.db.run("CREATE INDEX IF NOT EXISTS idx_stock_list_name ON stock_list(name)");
+
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS us_short_rates (
+        maturity TEXT NOT NULL,
+        date TEXT NOT NULL,
+        rate REAL,
+        UNIQUE(maturity, date)
+      )
+    `);
+    this.db.run("CREATE INDEX IF NOT EXISTS idx_us_short_rates ON us_short_rates(maturity, date)");
+
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS cn_rates (
+        type TEXT NOT NULL,
+        date TEXT NOT NULL,
+        rate REAL,
+        UNIQUE(type, date)
+      )
+    `);
+    this.db.run("CREATE INDEX IF NOT EXISTS idx_cn_rates ON cn_rates(type, date)");
+
+    const indexPeriods = ["daily", "weekly", "monthly", "quarterly", "yearly"] as const;
+    for (const period of indexPeriods) {
+      this.db.run(`
+        CREATE TABLE IF NOT EXISTS index_${period} (
+          code TEXT NOT NULL,
+          date TEXT NOT NULL,
+          open REAL, high REAL, low REAL, close REAL,
+          volume REAL, amount REAL,
+          UNIQUE(code, date)
+        )
+      `);
+      this.db.run(`CREATE INDEX IF NOT EXISTS idx_index_${period}_code ON index_${period}(code)`);
+    }
+
+    const fxPeriods = ["daily", "weekly", "monthly", "quarterly", "yearly"] as const;
+    for (const period of fxPeriods) {
+      this.db.run(`
+        CREATE TABLE IF NOT EXISTS fx_cny_usd_${period} (
+          date TEXT PRIMARY KEY,
+          open REAL, high REAL, low REAL, close REAL
+        )
+      `);
+    }
+
+    const goldPeriods = ["daily", "weekly", "monthly", "quarterly", "yearly"] as const;
+    for (const period of goldPeriods) {
+      this.db.run(`
+        CREATE TABLE IF NOT EXISTS gold_price_${period} (
+          date TEXT PRIMARY KEY,
+          open REAL, high REAL, low REAL, close REAL
+        )
+      `);
+    }
+
+    const oilPeriods = ["daily", "weekly", "monthly", "quarterly", "yearly"] as const;
+    for (const period of oilPeriods) {
+      this.db.run(`
+        CREATE TABLE IF NOT EXISTS crude_oil_${period} (
+          date TEXT PRIMARY KEY,
+          open REAL, high REAL, low REAL, close REAL
+        )
+      `);
+    }
+
+    const cn10yPeriods = ["daily", "weekly", "monthly", "quarterly", "yearly"] as const;
+    for (const period of cn10yPeriods) {
+      this.db.run(`
+        CREATE TABLE IF NOT EXISTS cn10y_${period} (
+          date TEXT PRIMARY KEY,
+          open REAL, high REAL, low REAL, close REAL
+        )
+      `);
+    }
+  }
+
+  // ---- Persistence ----
+
+  persist(): void {
+    if (!this.db) return;
+    const data = this.db.export();
+    const buffer = Buffer.from(data);
+    const dir = path.dirname(DB_PATH);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(DB_PATH, buffer);
+  }
+
+  // ---- K-line operations ----
+
+  insertKlineBatch(rows: { code: string; period: string; date: string; open: number; high: number; low: number; close: number; volume: number; amount: number }[]): void {
+    if (!this.db || rows.length === 0) return;
+
+    const stmt = this.db.prepare(
+      "INSERT OR REPLACE INTO kline_data (code, period, date, open, high, low, close, volume, amount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    );
+
+    this.db.run("BEGIN TRANSACTION");
+    for (const r of rows) {
+      stmt.run([r.code, r.period, r.date, r.open, r.high, r.low, r.close, r.volume, r.amount]);
+    }
+    this.db.run("COMMIT");
+    stmt.free();
+    this.persist();
+  }
+
+  getKline(code: string, period: string, start: string, end: string): KlineData[] {
+    if (!this.db) return [];
+
+    const stmt = this.db.prepare(
+      "SELECT date, open, high, low, close, volume, amount FROM kline_data WHERE code = ? AND period = ? AND date >= ? AND date <= ? ORDER BY date ASC"
+    );
+    stmt.bind([code, period, start, end]);
+
+    const results: KlineData[] = [];
+    while (stmt.step()) {
+      const row = stmt.getAsObject();
+      results.push({
+        date: row.date as string,
+        open: row.open as number,
+        high: row.high as number,
+        low: row.low as number,
+        close: row.close as number,
+        volume: row.volume as number,
+        amount: row.amount as number,
+      });
+    }
+    stmt.free();
+    return results;
+  }
+
+  hasKline(code: string, period: string): boolean {
+    if (!this.db) return false;
+    const stmt = this.db.prepare("SELECT COUNT(*) as cnt FROM kline_data WHERE code = ? AND period = ?");
+    stmt.bind([code, period]);
+    stmt.step();
+    const row = stmt.getAsObject();
+    stmt.free();
+    return (row.cnt as number) > 0;
+  }
+
+  getAvailableDateRange(code: string, period: string): { minDate: string; maxDate: string } | null {
+    if (!this.db) return null;
+    const stmt = this.db.prepare("SELECT MIN(date) as minDate, MAX(date) as maxDate FROM kline_data WHERE code = ? AND period = ?");
+    stmt.bind([code, period]);
+    stmt.step();
+    const row = stmt.getAsObject();
+    stmt.free();
+    if (!row.minDate || !row.maxDate) return null;
+    return { minDate: row.minDate as string, maxDate: row.maxDate as string };
+  }
+
+  // ---- Backtest operations ----
+
+  saveBacktestResult(id: string, name: string, config: unknown, metrics: unknown, equityCurve: unknown): void {
+    if (!this.db) return;
+    this.db.run(
+      "INSERT OR REPLACE INTO backtest_results (id, name, config, metrics, equity_curve) VALUES (?, ?, ?, ?, ?)",
+      [id, name, JSON.stringify(config), JSON.stringify(metrics), JSON.stringify(equityCurve)]
+    );
+    this.persist();
+  }
+
+  getBacktestResult(id: string): { id: string; name: string; config: string; metrics: string; equity_curve: string; created_at: string } | null {
+    if (!this.db) return null;
+    const stmt = this.db.prepare("SELECT * FROM backtest_results WHERE id = ?");
+    stmt.bind([id]);
+    if (!stmt.step()) { stmt.free(); return null; }
+    const row = stmt.getAsObject();
+    stmt.free();
+    return row as any;
+  }
+
+  listBacktestResults(): { id: string; name: string; created_at: string }[] {
+    if (!this.db) return [];
+    const results: any[] = [];
+    const stmt = this.db.prepare("SELECT id, name, created_at FROM backtest_results ORDER BY created_at DESC");
+    while (stmt.step()) {
+      results.push(stmt.getAsObject());
+    }
+    stmt.free();
+    return results;
+  }
+
+  // ---- Trade operations ----
+
+  saveTrades(backtestId: string, trades: Trade[]): void {
+    if (!this.db || trades.length === 0) return;
+
+    const stmt = this.db.prepare(
+      "INSERT INTO trades (backtest_id, code, entry_date, entry_price, exit_date, exit_price, shares, pnl, pnl_pct, exit_reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    );
+
+    this.db.run("BEGIN TRANSACTION");
+    for (const t of trades) {
+      stmt.run([backtestId, t.code, t.entryDate, t.entryPrice, t.exitDate, t.exitPrice, t.shares, t.pnl, t.pnlPct, t.exitReason]);
+    }
+    this.db.run("COMMIT");
+    stmt.free();
+    this.persist();
+  }
+
+  getTrades(backtestId: string): Trade[] {
+    if (!this.db) return [];
+
+    const stmt = this.db.prepare("SELECT * FROM trades WHERE backtest_id = ? ORDER BY entry_date");
+    stmt.bind([backtestId]);
+
+    const results: Trade[] = [];
+    while (stmt.step()) {
+      const row = stmt.getAsObject() as unknown as DbTrade;
+      results.push({
+        code: row.code,
+        entryDate: row.entry_date,
+        entryPrice: row.entry_price,
+        exitDate: row.exit_date,
+        exitPrice: row.exit_price,
+        shares: row.shares,
+        pnl: row.pnl,
+        pnlPct: row.pnl_pct,
+        exitReason: row.exit_reason,
+      });
+    }
+    stmt.free();
+    return results;
+  }
+
+  // ---- Screening results ----
+
+  saveScreeningResult(runId: string, results: ScreeningResult[]): void {
+    if (!this.db || results.length === 0) return;
+
+    const stmt = this.db.prepare(
+      "INSERT INTO screening_results (run_id, code, name, close, change_pct) VALUES (?, ?, ?, ?, ?)"
+    );
+
+    this.db.run("BEGIN TRANSACTION");
+    for (const r of results) {
+      stmt.run([runId, r.code, r.name, r.close, r.changePct]);
+    }
+    this.db.run("COMMIT");
+    stmt.free();
+    this.persist();
+  }
+
+  // ---- Monitor jobs ----
+
+  saveMonitorJob(job: MonitorJob): void {
+    if (!this.db) return;
+    this.db.run(
+      "INSERT OR REPLACE INTO monitor_jobs (id, name, config, enabled) VALUES (?, ?, ?, ?)",
+      [job.id, job.name, JSON.stringify(job), job.enabled ? 1 : 0]
+    );
+    this.persist();
+  }
+
+  getMonitorJobs(): MonitorJob[] {
+    if (!this.db) return [];
+    const stmt = this.db.prepare("SELECT config FROM monitor_jobs WHERE enabled = 1");
+    const results: MonitorJob[] = [];
+    while (stmt.step()) {
+      const row = stmt.getAsObject();
+      try {
+        results.push(JSON.parse(row.config as string));
+      } catch { /* skip corrupt entries */ }
+    }
+    stmt.free();
+    return results;
+  }
+
+  deleteMonitorJob(id: string): void {
+    if (!this.db) return;
+    this.db.run("DELETE FROM monitor_jobs WHERE id = ?", [id]);
+    this.persist();
+  }
+
+  saveMonitoringRun(jobId: string, entrySignals: unknown, exitSignals: unknown): void {
+    if (!this.db) return;
+    this.db.run(
+      "INSERT INTO monitoring_results (job_id, entry_signals, exit_signals) VALUES (?, ?, ?)",
+      [jobId, JSON.stringify(entrySignals), JSON.stringify(exitSignals)]
+    );
+    this.persist();
+  }
+
+  // ---- Stock list operations ----
+
+  saveStockList(stocks: { code: string; name: string; market?: string; industry?: string }[]): void {
+    if (!this.db || stocks.length === 0) return;
+
+    const stmt = this.db.prepare(
+      "INSERT OR REPLACE INTO stock_list (code, name, market, industry, updated_at) VALUES (?, ?, ?, ?, datetime('now'))"
+    );
+
+    this.db.run("BEGIN TRANSACTION");
+    for (const s of stocks) {
+      stmt.run([s.code, s.name, s.market || null, s.industry || null]);
+    }
+    this.db.run("COMMIT");
+    stmt.free();
+    this.persist();
+  }
+
+  getStockList(): { code: string; name: string; market?: string; industry?: string; updated_at?: string }[] {
+    if (!this.db) return [];
+
+    const results: any[] = [];
+    const stmt = this.db.prepare("SELECT code, name, market, industry, updated_at FROM stock_list ORDER BY code");
+    while (stmt.step()) results.push(stmt.getAsObject());
+    stmt.free();
+    return results;
+  }
+
+  countStockList(): number {
+    if (!this.db) return 0;
+    const stmt = this.db.prepare("SELECT COUNT(*) as cnt FROM stock_list");
+    stmt.step();
+    const row = stmt.getAsObject();
+    stmt.free();
+    return (row.cnt as number) || 0;
+  }
+
+  getStockByCode(code: string): StockInfo | null {
+    if (!this.db) return null;
+    const stmt = this.db.prepare(
+      "SELECT code, name, market, industry FROM stock_list WHERE code = ?"
+    );
+    stmt.bind([code]);
+    let row: any = null;
+    if (stmt.step()) row = stmt.getAsObject();
+    stmt.free();
+    if (!row) return null;
+    return {
+      code: row.code as string,
+      name: row.name as string,
+      market: (row.market as string) || undefined,
+      industry: (row.industry as string) || undefined,
+    };
+  }
+
+  // ---- US short-term treasury rates ----
+
+  insertUsShortRates(maturity: string, rows: { date: string; rate: number }[]): void {
+    if (!this.db || rows.length === 0) return;
+
+    const stmt = this.db.prepare(
+      "INSERT OR REPLACE INTO us_short_rates (maturity, date, rate) VALUES (?, ?, ?)"
+    );
+
+    this.db.run("BEGIN TRANSACTION");
+    for (const r of rows) {
+      stmt.run([maturity, r.date, r.rate]);
+    }
+    this.db.run("COMMIT");
+    stmt.free();
+    this.persist();
+  }
+
+  getUsShortRates(maturity: string, start?: string, end?: string): { date: string; rate: number }[] {
+    if (!this.db) return [];
+
+    const sql = start && end
+      ? "SELECT date, rate FROM us_short_rates WHERE maturity = ? AND date >= ? AND date <= ? ORDER BY date ASC"
+      : "SELECT date, rate FROM us_short_rates WHERE maturity = ? ORDER BY date ASC";
+    const stmt = this.db.prepare(sql);
+    const params = start && end ? [maturity, start, end] : [maturity];
+    stmt.bind(params);
+
+    const results: { date: string; rate: number }[] = [];
+    while (stmt.step()) {
+      const row = stmt.getAsObject();
+      results.push({ date: row.date as string, rate: row.rate as number });
+    }
+    stmt.free();
+    return results;
+  }
+
+  hasUsShortRates(maturity: string): boolean {
+    if (!this.db) return false;
+    const stmt = this.db.prepare("SELECT COUNT(*) as cnt FROM us_short_rates WHERE maturity = ?");
+    stmt.bind([maturity]);
+    stmt.step();
+    const row = stmt.getAsObject();
+    stmt.free();
+    return (row.cnt as number) > 0;
+  }
+
+  getUsShortRatesDateRange(maturity: string): { minDate: string; maxDate: string } | null {
+    if (!this.db) return null;
+    const stmt = this.db.prepare("SELECT MIN(date) as minDate, MAX(date) as maxDate FROM us_short_rates WHERE maturity = ?");
+    stmt.bind([maturity]);
+    stmt.step();
+    const row = stmt.getAsObject();
+    stmt.free();
+    if (!row.minDate || !row.maxDate) return null;
+    return { minDate: row.minDate as string, maxDate: row.maxDate as string };
+  }
+
+  // ---- CNY interest rates ----
+
+  insertCnRates(type: string, rows: { date: string; rate: number }[]): void {
+    if (!this.db || rows.length === 0) return;
+
+    const stmt = this.db.prepare(
+      "INSERT OR REPLACE INTO cn_rates (type, date, rate) VALUES (?, ?, ?)"
+    );
+
+    this.db.run("BEGIN TRANSACTION");
+    for (const r of rows) {
+      stmt.run([type, r.date, r.rate]);
+    }
+    this.db.run("COMMIT");
+    stmt.free();
+    this.persist();
+  }
+
+  getCnRates(type: string, start?: string, end?: string): { date: string; rate: number }[] {
+    if (!this.db) return [];
+
+    const sql = start && end
+      ? "SELECT date, rate FROM cn_rates WHERE type = ? AND date >= ? AND date <= ? ORDER BY date ASC"
+      : "SELECT date, rate FROM cn_rates WHERE type = ? ORDER BY date ASC";
+    const stmt = this.db.prepare(sql);
+    const params = start && end ? [type, start, end] : [type];
+    stmt.bind(params);
+
+    const results: { date: string; rate: number }[] = [];
+    while (stmt.step()) {
+      const row = stmt.getAsObject();
+      results.push({ date: row.date as string, rate: row.rate as number });
+    }
+    stmt.free();
+    return results;
+  }
+
+  hasCnRates(type: string): boolean {
+    if (!this.db) return false;
+    const stmt = this.db.prepare("SELECT COUNT(*) as cnt FROM cn_rates WHERE type = ?");
+    stmt.bind([type]);
+    stmt.step();
+    const row = stmt.getAsObject();
+    stmt.free();
+    return (row.cnt as number) > 0;
+  }
+
+  getCnRatesDateRange(type: string): { minDate: string; maxDate: string } | null {
+    if (!this.db) return null;
+    const stmt = this.db.prepare("SELECT MIN(date) as minDate, MAX(date) as maxDate FROM cn_rates WHERE type = ?");
+    stmt.bind([type]);
+    stmt.step();
+    const row = stmt.getAsObject();
+    stmt.free();
+    if (!row.minDate || !row.maxDate) return null;
+    return { minDate: row.minDate as string, maxDate: row.maxDate as string };
+  }
+
+  // ---- Market index period tables ----
+
+  insertIndexPeriod(period: string, rows: { code: string; date: string; open: number; high: number; low: number; close: number; volume: number; amount: number }[]): void {
+    if (!this.db || rows.length === 0) return;
+
+    const tableName = `index_${period}`;
+    const stmt = this.db.prepare(
+      `INSERT OR REPLACE INTO ${tableName} (code, date, open, high, low, close, volume, amount) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    );
+
+    this.db.run("BEGIN TRANSACTION");
+    for (const r of rows) {
+      stmt.run([r.code, r.date, r.open, r.high, r.low, r.close, r.volume, r.amount]);
+    }
+    this.db.run("COMMIT");
+    stmt.free();
+    this.persist();
+  }
+
+  getIndexPeriod(period: string, code: string, start?: string, end?: string): { date: string; open: number; high: number; low: number; close: number; volume: number; amount: number }[] {
+    if (!this.db) return [];
+
+    const tableName = `index_${period}`;
+    const sql = start && end
+      ? `SELECT date, open, high, low, close, volume, amount FROM ${tableName} WHERE code = ? AND date >= ? AND date <= ? ORDER BY date ASC`
+      : `SELECT date, open, high, low, close, volume, amount FROM ${tableName} WHERE code = ? ORDER BY date ASC`;
+    const stmt = this.db.prepare(sql);
+    const params = start && end ? [code, start, end] : [code];
+    stmt.bind(params);
+
+    const results: { date: string; open: number; high: number; low: number; close: number; volume: number; amount: number }[] = [];
+    while (stmt.step()) {
+      const row = stmt.getAsObject();
+      results.push({
+        date: row.date as string,
+        open: row.open as number,
+        high: row.high as number,
+        low: row.low as number,
+        close: row.close as number,
+        volume: row.volume as number,
+        amount: row.amount as number,
+      });
+    }
+    stmt.free();
+    return results;
+  }
+
+  hasIndexPeriod(period: string, code: string): boolean {
+    if (!this.db) return false;
+    const tableName = `index_${period}`;
+    const stmt = this.db.prepare(`SELECT COUNT(*) as cnt FROM ${tableName} WHERE code = ?`);
+    stmt.bind([code]);
+    stmt.step();
+    const row = stmt.getAsObject();
+    stmt.free();
+    return (row.cnt as number) > 0;
+  }
+
+  getIndexPeriodDateRange(period: string, code: string): { minDate: string; maxDate: string } | null {
+    if (!this.db) return null;
+    const tableName = `index_${period}`;
+    const stmt = this.db.prepare(`SELECT MIN(date) as minDate, MAX(date) as maxDate FROM ${tableName} WHERE code = ?`);
+    stmt.bind([code]);
+    stmt.step();
+    const row = stmt.getAsObject();
+    stmt.free();
+    if (!row.minDate || !row.maxDate) return null;
+    return { minDate: row.minDate as string, maxDate: row.maxDate as string };
+  }
+
+  // ---- FX CNY/USD period tables ----
+
+  insertFxCnyUsd(period: string, rows: { date: string; open: number; high: number; low: number; close: number }[]): void {
+    if (!this.db || rows.length === 0) return;
+
+    const tableName = `fx_cny_usd_${period}`;
+    const stmt = this.db.prepare(
+      `INSERT OR REPLACE INTO ${tableName} (date, open, high, low, close) VALUES (?, ?, ?, ?, ?)`
+    );
+
+    this.db.run("BEGIN TRANSACTION");
+    for (const r of rows) {
+      stmt.run([r.date, r.open, r.high, r.low, r.close]);
+    }
+    this.db.run("COMMIT");
+    stmt.free();
+    this.persist();
+  }
+
+  getFxCnyUsd(period: string, start?: string, end?: string): { date: string; open: number; high: number; low: number; close: number }[] {
+    if (!this.db) return [];
+
+    const tableName = `fx_cny_usd_${period}`;
+    const sql = start && end
+      ? `SELECT date, open, high, low, close FROM ${tableName} WHERE date >= ? AND date <= ? ORDER BY date ASC`
+      : `SELECT date, open, high, low, close FROM ${tableName} ORDER BY date ASC`;
+    const stmt = this.db.prepare(sql);
+    const params = start && end ? [start, end] : [];
+    stmt.bind(params);
+
+    const results: { date: string; open: number; high: number; low: number; close: number }[] = [];
+    while (stmt.step()) {
+      const row = stmt.getAsObject();
+      results.push({
+        date: row.date as string,
+        open: row.open as number,
+        high: row.high as number,
+        low: row.low as number,
+        close: row.close as number,
+      });
+    }
+    stmt.free();
+    return results;
+  }
+
+  hasFxCnyUsd(period: string): boolean {
+    if (!this.db) return false;
+    const tableName = `fx_cny_usd_${period}`;
+    const stmt = this.db.prepare(`SELECT COUNT(*) as cnt FROM ${tableName}`);
+    stmt.step();
+    const row = stmt.getAsObject();
+    stmt.free();
+    return (row.cnt as number) > 0;
+  }
+
+  getFxCnyUsdDateRange(period: string): { minDate: string; maxDate: string } | null {
+    if (!this.db) return null;
+    const tableName = `fx_cny_usd_${period}`;
+    const stmt = this.db.prepare(`SELECT MIN(date) as minDate, MAX(date) as maxDate FROM ${tableName}`);
+    stmt.step();
+    const row = stmt.getAsObject();
+    stmt.free();
+    if (!row.minDate || !row.maxDate) return null;
+    return { minDate: row.minDate as string, maxDate: row.maxDate as string };
+  }
+
+  // ---- Gold price period tables ----
+
+  insertGoldPrice(period: string, rows: { date: string; open: number; high: number; low: number; close: number }[]): void {
+    if (!this.db || rows.length === 0) return;
+
+    const tableName = `gold_price_${period}`;
+    const stmt = this.db.prepare(
+      `INSERT OR REPLACE INTO ${tableName} (date, open, high, low, close) VALUES (?, ?, ?, ?, ?)`
+    );
+
+    this.db.run("BEGIN TRANSACTION");
+    for (const r of rows) {
+      stmt.run([r.date, r.open, r.high, r.low, r.close]);
+    }
+    this.db.run("COMMIT");
+    stmt.free();
+    this.persist();
+  }
+
+  getGoldPrice(period: string, start?: string, end?: string): { date: string; open: number; high: number; low: number; close: number }[] {
+    if (!this.db) return [];
+
+    const tableName = `gold_price_${period}`;
+    const sql = start && end
+      ? `SELECT date, open, high, low, close FROM ${tableName} WHERE date >= ? AND date <= ? ORDER BY date ASC`
+      : `SELECT date, open, high, low, close FROM ${tableName} ORDER BY date ASC`;
+    const stmt = this.db.prepare(sql);
+    const params = start && end ? [start, end] : [];
+    stmt.bind(params);
+
+    const results: { date: string; open: number; high: number; low: number; close: number }[] = [];
+    while (stmt.step()) {
+      const row = stmt.getAsObject();
+      results.push({
+        date: row.date as string,
+        open: row.open as number,
+        high: row.high as number,
+        low: row.low as number,
+        close: row.close as number,
+      });
+    }
+    stmt.free();
+    return results;
+  }
+
+  hasGoldPrice(period: string): boolean {
+    if (!this.db) return false;
+    const tableName = `gold_price_${period}`;
+    const stmt = this.db.prepare(`SELECT COUNT(*) as cnt FROM ${tableName}`);
+    stmt.step();
+    const row = stmt.getAsObject();
+    stmt.free();
+    return (row.cnt as number) > 0;
+  }
+
+  getGoldPriceDateRange(period: string): { minDate: string; maxDate: string } | null {
+    if (!this.db) return null;
+    const tableName = `gold_price_${period}`;
+    const stmt = this.db.prepare(`SELECT MIN(date) as minDate, MAX(date) as maxDate FROM ${tableName}`);
+    stmt.step();
+    const row = stmt.getAsObject();
+    stmt.free();
+    if (!row.minDate || !row.maxDate) return null;
+    return { minDate: row.minDate as string, maxDate: row.maxDate as string };
+  }
+
+  // ---- Crude oil period tables ----
+
+  insertCrudeOil(period: string, rows: { date: string; open: number; high: number; low: number; close: number }[]): void {
+    if (!this.db || rows.length === 0) return;
+
+    const tableName = `crude_oil_${period}`;
+    const stmt = this.db.prepare(
+      `INSERT OR REPLACE INTO ${tableName} (date, open, high, low, close) VALUES (?, ?, ?, ?, ?)`
+    );
+
+    this.db.run("BEGIN TRANSACTION");
+    for (const r of rows) {
+      stmt.run([r.date, r.open, r.high, r.low, r.close]);
+    }
+    this.db.run("COMMIT");
+    stmt.free();
+    this.persist();
+  }
+
+  getCrudeOil(period: string, start?: string, end?: string): { date: string; open: number; high: number; low: number; close: number }[] {
+    if (!this.db) return [];
+
+    const tableName = `crude_oil_${period}`;
+    const sql = start && end
+      ? `SELECT date, open, high, low, close FROM ${tableName} WHERE date >= ? AND date <= ? ORDER BY date ASC`
+      : `SELECT date, open, high, low, close FROM ${tableName} ORDER BY date ASC`;
+    const stmt = this.db.prepare(sql);
+    const params = start && end ? [start, end] : [];
+    stmt.bind(params);
+
+    const results: { date: string; open: number; high: number; low: number; close: number }[] = [];
+    while (stmt.step()) {
+      const row = stmt.getAsObject();
+      results.push({
+        date: row.date as string,
+        open: row.open as number,
+        high: row.high as number,
+        low: row.low as number,
+        close: row.close as number,
+      });
+    }
+    stmt.free();
+    return results;
+  }
+
+  hasCrudeOil(period: string): boolean {
+    if (!this.db) return false;
+    const tableName = `crude_oil_${period}`;
+    const stmt = this.db.prepare(`SELECT COUNT(*) as cnt FROM ${tableName}`);
+    stmt.step();
+    const row = stmt.getAsObject();
+    stmt.free();
+    return (row.cnt as number) > 0;
+  }
+
+  getCrudeOilDateRange(period: string): { minDate: string; maxDate: string } | null {
+    if (!this.db) return null;
+    const tableName = `crude_oil_${period}`;
+    const stmt = this.db.prepare(`SELECT MIN(date) as minDate, MAX(date) as maxDate FROM ${tableName}`);
+    stmt.step();
+    const row = stmt.getAsObject();
+    stmt.free();
+    if (!row.minDate || !row.maxDate) return null;
+    return { minDate: row.minDate as string, maxDate: row.maxDate as string };
+  }
+
+  // ---- CN 10Y bond yield period tables ----
+
+  insertCn10y(period: string, rows: { date: string; open: number; high: number; low: number; close: number }[]): void {
+    if (!this.db || rows.length === 0) return;
+
+    const tableName = `cn10y_${period}`;
+    const stmt = this.db.prepare(
+      `INSERT OR REPLACE INTO ${tableName} (date, open, high, low, close) VALUES (?, ?, ?, ?, ?)`
+    );
+
+    this.db.run("BEGIN TRANSACTION");
+    for (const r of rows) {
+      stmt.run([r.date, r.open, r.high, r.low, r.close]);
+    }
+    this.db.run("COMMIT");
+    stmt.free();
+    this.persist();
+  }
+
+  getCn10y(period: string, start?: string, end?: string): { date: string; open: number; high: number; low: number; close: number }[] {
+    if (!this.db) return [];
+
+    const tableName = `cn10y_${period}`;
+    const sql = start && end
+      ? `SELECT date, open, high, low, close FROM ${tableName} WHERE date >= ? AND date <= ? ORDER BY date ASC`
+      : `SELECT date, open, high, low, close FROM ${tableName} ORDER BY date ASC`;
+    const stmt = this.db.prepare(sql);
+    const params = start && end ? [start, end] : [];
+    stmt.bind(params);
+
+    const results: { date: string; open: number; high: number; low: number; close: number }[] = [];
+    while (stmt.step()) {
+      const row = stmt.getAsObject();
+      results.push({
+        date: row.date as string,
+        open: row.open as number,
+        high: row.high as number,
+        low: row.low as number,
+        close: row.close as number,
+      });
+    }
+    stmt.free();
+    return results;
+  }
+
+  hasCn10y(period: string): boolean {
+    if (!this.db) return false;
+    const tableName = `cn10y_${period}`;
+    const stmt = this.db.prepare(`SELECT COUNT(*) as cnt FROM ${tableName}`);
+    stmt.step();
+    const row = stmt.getAsObject();
+    stmt.free();
+    return (row.cnt as number) > 0;
+  }
+
+  getCn10yDateRange(period: string): { minDate: string; maxDate: string } | null {
+    if (!this.db) return null;
+    const tableName = `cn10y_${period}`;
+    const stmt = this.db.prepare(`SELECT MIN(date) as minDate, MAX(date) as maxDate FROM ${tableName}`);
+    stmt.step();
+    const row = stmt.getAsObject();
+    stmt.free();
+    if (!row.minDate || !row.maxDate) return null;
+    return { minDate: row.minDate as string, maxDate: row.maxDate as string };
+  }
+
+  // ---- Utility ----
+
+  close(): void {
+    if (this.db) {
+      this.db.close();
+      this.db = null;
+    }
+  }
+}
+
+export const db = new StockDatabase();

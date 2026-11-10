@@ -1,0 +1,60 @@
+# .NET
+bin/
+obj/
+*.user
+*.db
+*.db-shm
+*.db-wal
+
+# Node
+QuantitativeTrading/client/node_modules/
+QuantitativeTrading/core/node_modules/
+QuantitativeTrading/server/node_modules/
+
+
+stock-analyzer/client/node_modules/
+stock-analyzer/path/node_modules/
+stock-analyzer/scraper/node_modules/
+stock-analyzer/server/node_modules/
+stock-analyzer/shared/node_modules/
+
+
+stockAnalyzer/backend/node_modules/
+stockAnalyzer/deploy/dist/
+stockAnalyzer/frontend/node_modules/
+stockAnalyzer/frontend/dist/
+
+  
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+*~
+
+ 
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+ 
+
+# Pytest
+.pytest_cache/
+htmlcov/
+.coverage
+*.coverage
+
+# OS
+Thumbs.db
+.DS_Store
