@@ -6,26 +6,13 @@ obj/
 *.db-shm
 *.db-wal
 
-# Node
-QuantitativeTrading/client/node_modules/
-QuantitativeTrading/core/node_modules/
-QuantitativeTrading/server/node_modules/
+**/node_modules/
+**/dist/
 
+**/bin/Debug/
+**/bin/Release/
+**/obj/
 
-stock-analyzer/client/node_modules/
-stock-analyzer/patch/node_modules/
-stock-analyzer/scraper/node_modules/
-stock-analyzer/server/node_modules/
-stock-analyzer/server/dist/
-stock-analyzer/shared/node_modules/
-
-
-stockAnalyzer/backend/node_modules/
-stockAnalyzer/deploy/dist/
-stockAnalyzer/frontend/node_modules/
-stockAnalyzer/frontend/dist/
-
-  
 
 # Environment
 .env
