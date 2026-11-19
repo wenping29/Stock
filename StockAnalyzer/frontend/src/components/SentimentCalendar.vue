@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import type { SentimentHistoryPoint } from '../types'
 
-// 情绪日历：按交易日格子显示情绪温度分，用冷热 5 档配色填充，悬停查看当日明细。
+// 情绪日历（紧凑版）：与情绪表盘并排展示，按交易日显示情绪分，冷热 5 档配色。
 const props = defineProps<{ points: SentimentHistoryPoint[] }>()
 
 interface Tone {
@@ -88,25 +88,17 @@ function fmtPct(v: number) {
 <template>
   <div class="sentiment-calendar">
     <div class="calendar-head">
-      <el-button-group size="small">
-        <el-button @click="move(-1)">‹</el-button>
-        <el-button :disabled="isCurrentMonth" @click="move(1)">›</el-button>
-      </el-button-group>
       <span class="month-label">{{ monthLabel }}</span>
-      <el-button v-if="!isCurrentMonth" link size="small" @click="backToNow">回到本月</el-button>
       <div style="flex: 1" />
-      <span class="month-summary" v-if="monthSummary">
-        本月 {{ monthSummary.days }} 个交易日 · 平均 {{ monthSummary.avg.toFixed(1) }} 分
-      </span>
-      <div class="legend">
-        <span v-for="t in TONES" :key="t.label" class="legend-item">
-          <i :style="{ background: t.color }" />{{ t.label }}
-        </span>
-      </div>
+      <el-button-group size="small">
+        <el-button size="small" @click="move(-1)">‹</el-button>
+        <el-button size="small" :disabled="isCurrentMonth" @click="move(1)">›</el-button>
+      </el-button-group>
+      <el-button v-if="!isCurrentMonth" link size="small" class="back-link" @click="backToNow">本月</el-button>
     </div>
 
     <div class="week-head">
-      <span v-for="w in weekdays" :key="w">周{{ w }}</span>
+      <span v-for="w in weekdays" :key="w">{{ w }}</span>
     </div>
 
     <div class="calendar-grid">
@@ -145,6 +137,14 @@ function fmtPct(v: number) {
         </div>
       </el-tooltip>
     </div>
+
+    <div class="calendar-foot">
+      <span v-for="t in TONES" :key="t.label" class="legend-item">
+        <i :style="{ background: t.color }" />{{ t.label }}
+      </span>
+      <div style="flex: 1" />
+      <span v-if="monthSummary" class="summary">{{ monthSummary.days }} 日均 {{ monthSummary.avg.toFixed(0) }}</span>
+    </div>
   </div>
 </template>
 
@@ -152,32 +152,27 @@ function fmtPct(v: number) {
 .calendar-head {
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 12px;
+  gap: 6px;
+  margin-bottom: 6px;
 }
-.month-label { font-size: 15px; font-weight: 600; color: #303133; }
-.month-summary { color: #909399; font-size: 12px; }
-
-.legend { display: flex; align-items: center; gap: 10px; }
-.legend-item { display: inline-flex; align-items: center; gap: 4px; color: #909399; font-size: 12px; }
-.legend-item i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+.month-label { font-size: 13px; font-weight: 600; color: #303133; }
+.back-link { margin-left: 2px; }
 
 .week-head,
 .calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 6px;
+  gap: 3px;
 }
-.week-head { margin-bottom: 6px; }
-.week-head span { text-align: center; color: #909399; font-size: 12px; }
+.week-head { margin-bottom: 4px; }
+.week-head span { text-align: center; color: #a8abb2; font-size: 9px; line-height: 1; }
 
 .cell {
-  min-height: 58px;
-  padding: 4px 6px;
+  min-height: 34px;
+  padding: 2px 3px;
   border: 1px solid #ebeef5;
-  border-left: 3px solid transparent;
-  border-radius: 6px;
+  border-left: 2px solid transparent;
+  border-radius: 4px;
   background: #fafafa;
   display: flex;
   flex-direction: column;
@@ -185,18 +180,22 @@ function fmtPct(v: number) {
   box-sizing: border-box;
 }
 .cell.empty { background: transparent; border-color: transparent; }
-.cell.has { cursor: default; }
 .cell.has:hover { filter: brightness(0.97); }
 .cell.today { box-shadow: inset 0 0 0 1px #409eff; }
 
-.day { color: #909399; font-size: 12px; line-height: 1; }
-.score { font-size: 18px; font-weight: 700; text-align: center; line-height: 1.1; }
+.day { color: #a8abb2; font-size: 9px; line-height: 1; }
+.score { font-size: 12px; font-weight: 700; text-align: center; line-height: 1.1; }
+
+.calendar-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+.legend-item { display: inline-flex; align-items: center; gap: 2px; color: #a8abb2; font-size: 10px; }
+.legend-item i { width: 6px; height: 6px; border-radius: 1px; display: inline-block; }
+.summary { color: #a8abb2; font-size: 10px; }
 
 .tip-title { font-weight: 600; margin-bottom: 4px; }
-
-@media (max-width: 900px) {
-  .cell { min-height: 46px; }
-  .score { font-size: 15px; }
-  .legend { display: none; }
-}
 </style>

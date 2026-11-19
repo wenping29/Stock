@@ -127,6 +127,10 @@ onMounted(load)
           <div class="gauge-delta dim" v-else>暂无上一交易日对比</div>
         </div>
 
+        <div class="page-card calendar-card">
+          <SentimentCalendar :points="allPoints" />
+        </div>
+
         <div class="stat-cards sentiment-cards">
           <div class="stat-card">
             <div class="label">涨跌家数</div>
@@ -189,15 +193,6 @@ onMounted(load)
         </div>
         <SentimentTrendChart v-if="points.length" :points="points" />
         <el-empty v-else description="情绪历史将从今天开始逐日积累，盘中刷新即可看到当日快照" :image-size="60" />
-      </div>
-
-      <!-- 情绪日历 -->
-      <div class="page-card">
-        <div class="card-head">
-          <h4>情绪日历</h4>
-          <span class="dim">按交易日显示情绪温度分，颜色越暖代表情绪越高</span>
-        </div>
-        <SentimentCalendar :points="allPoints" />
       </div>
 
       <!-- 行业冷暖 + 涨跌分布 -->
@@ -282,6 +277,15 @@ onMounted(load)
 .gauge-delta { margin-top: 8px; font-size: 13px; color: #909399; }
 .gauge-delta b { font-size: 15px; }
 
+.calendar-card {
+  width: 300px;
+  flex: none;
+  margin-bottom: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
 .sentiment-cards { flex: 1; align-content: flex-start; }
 .sentiment-cards .stat-card { min-width: 150px; }
 .sentiment-cards .value { display: flex; align-items: baseline; gap: 4px; }
@@ -328,6 +332,7 @@ onMounted(load)
 @media (max-width: 900px) {
   .sentiment-top { flex-direction: column; }
   .gauge-card { width: 100%; }
+  .calendar-card { width: 100%; }
   .sentiment-grid { grid-template-columns: 1fr; gap: 0; }
 }
 @media (max-width: 600px) {
