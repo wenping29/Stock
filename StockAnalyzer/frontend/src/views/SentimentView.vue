@@ -5,6 +5,7 @@ import { fetchSentimentOverview, fetchSentimentHistory, fetchSentimentStructure 
 import RefreshButton from '../components/RefreshButton.vue'
 import SentimentGauge from '../components/SentimentGauge.vue'
 import SentimentTrendChart from '../components/SentimentTrendChart.vue'
+import SentimentCalendar from '../components/SentimentCalendar.vue'
 
 const overview = ref<SentimentOverview | null>(null)
 const history = ref<SentimentHistory | null>(null)
@@ -14,14 +15,25 @@ const historyDays = ref(60)
 const industryTab = ref<'top' | 'bottom'>('top')
 
 const latest = computed(() => overview.value?.latest ?? null)
-const points = computed(() => history.value?.points ?? [])
+// 一次性取一年历史，趋势图按所选区间在本地截取，日历直接复用全量点
+const allPoints = computed(() => history.value?.points ?? [])
+const points = computed(() => {
+  const since = shiftDateKey(historyDays.value)
+  return allPoints.value.filter((p) => p.date >= since)
+})
+
+function shiftDateKey(days: number) {
+  const d = new Date()
+  d.setDate(d.getDate() - days)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 async function load() {
   loading.value = true
   try {
     const [ov, hi, st] = await Promise.all([
       fetchSentimentOverview().catch(() => null),
-      fetchSentimentHistory(historyDays.value).catch(() => null),
+      fetchSentimentHistory(365).catch(() => null),
       fetchSentimentStructure().catch(() => null),
     ])
     overview.value = ov
@@ -30,11 +42,6 @@ async function load() {
   } finally {
     loading.value = false
   }
-}
-
-async function reloadHistory() {
-  history.value = null
-  history.value = await fetchSentimentHistory(historyDays.value).catch(() => null)
 }
 
 // ---------- 概览派生指标 ----------
@@ -173,7 +180,7 @@ onMounted(load)
         <div class="chart-toolbar">
           <span class="chart-title">情绪温度与涨跌家数趋势 —— 柱形向上为上涨家数、向下为下跌家数，蓝线为 0-100 情绪分</span>
           <div style="flex: 1" />
-          <el-radio-group v-model="historyDays" size="small" @change="reloadHistory">
+          <el-radio-group v-model="historyDays" size="small">
             <el-radio-button :value="30">近1月</el-radio-button>
             <el-radio-button :value="60">近2月</el-radio-button>
             <el-radio-button :value="90">近3月</el-radio-button>
@@ -182,6 +189,15 @@ onMounted(load)
         </div>
         <SentimentTrendChart v-if="points.length" :points="points" />
         <el-empty v-else description="情绪历史将从今天开始逐日积累，盘中刷新即可看到当日快照" :image-size="60" />
+      </div>
+
+      <!-- 情绪日历 -->
+      <div class="page-card">
+        <div class="card-head">
+          <h4>情绪日历</h4>
+          <span class="dim">按交易日显示情绪温度分，颜色越暖代表情绪越高</span>
+        </div>
+        <SentimentCalendar :points="allPoints" />
       </div>
 
       <!-- 行业冷暖 + 涨跌分布 -->
