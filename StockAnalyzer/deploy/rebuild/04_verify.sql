@@ -2,7 +2,7 @@
 -- FundAnalysis 灾难重建 · 04 / 验收与账号连通性核对
 -- 执行位置：fund_db 库内
 --   psql -v ON_ERROR_STOP=1 -h <HOST> -p <PORT> -U fundmanager -d fund_db -f 04_verify.sql
--- 期望结果：26 张表、32 个索引、5 条迁移历史、4 个 fund* 角色
+-- 期望结果：27 张表、33 个索引、6 条迁移历史、4 个 fund* 角色
 -- 前置：4 个角色由 01（或 01b 补建）创建；缺角色时先补角色再跑 03。
 -- =====================================================================
 
@@ -18,7 +18,8 @@ WITH expected(t) AS (
     VALUES ('AlertRules'), ('AspNetRoleClaims'), ('AspNetRoles'), ('AspNetUserClaims'),
            ('AspNetUserLogins'), ('AspNetUserRoles'), ('AspNetUserTokens'), ('AspNetUsers'),
            ('FundHoldingSyncs'), ('FundHoldings'), ('FundNavs'), ('IndexDailies'),
-           ('IndexIntradays'), ('LprRates'), ('MarketIndicators'), ('MoneyFlowDailies'),
+           ('IndexIntradays'), ('LprRates'), ('MarketIndicators'), ('MarketSentimentDailies'),
+           ('MoneyFlowDailies'),
            ('MoneySupplies'), ('OmoOperations'), ('ReserveRatios'), ('ShiborRates'),
            ('StockBasics'), ('StockDailies'), ('StockFundamentals'), ('StockMinutes'),
            ('WatchlistItems'), ('__EFMigrationsHistory')
@@ -30,7 +31,7 @@ LEFT JOIN information_schema.tables i
 WHERE i.table_name IS NULL
 ORDER BY 1;
 
--- 3) 索引数量（应为 32）与迁移历史（应为 5 行，顺序与 02 头部一致）
+-- 3) 索引数量（应为 33）与迁移历史（应为 6 行，顺序与 02 头部一致）
 SELECT count(*) AS index_count FROM pg_indexes WHERE schemaname = 'public';
 SELECT "MigrationId", "ProductVersion" FROM "__EFMigrationsHistory" ORDER BY 1;
 
@@ -84,7 +85,7 @@ SELECT r."Name" AS role_name FROM "AspNetRoles" r ORDER BY 1;
 -- 9) 重建后的必要动作
 --    a. 后端 appsettings.json / 环境变量：确认 ConnectionStrings__Default 指向
 --       fund_db + fundmanager + 01 中设置的密码；Web 与 Collector 必须完全一致。
---    b. 启动 Web：MigrateAsync() 看到 5 条历史会跳过建表；
+--    b. 启动 Web：MigrateAsync() 看到 6 条历史会跳过建表；
 --       DbSeeder 创建角色与 admin；首次启动自动触发 InitialSync / SyncAll /
 --       SyncIndices / SyncMarketIndicators / SyncFundList 等采集任务补行情数据。
 --    c. 启动 Collector（若有独立部署），确认 Collector__ScheduleEnabled 二选一，避免重复采集。

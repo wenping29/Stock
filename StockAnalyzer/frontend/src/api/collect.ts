@@ -3,7 +3,7 @@ import http from './http'
 /** 采集分类（与后端 POST /api/collect/{category} 对应）。 */
 export type CollectCategory =
   | 'indices' | 'indicators' | 'intraday' | 'watchlist' | 'minutes'
-  | 'stock-list' | 'liquidity' | 'fundamentals' | 'fund-list' | 'all'
+  | 'stock-list' | 'liquidity' | 'fundamentals' | 'fund-list' | 'sentiment' | 'all'
 
 /** 采集作业。state 取 Hangfire：Enqueued / Processing / Succeeded / Failed 等。 */
 export interface CollectJob {

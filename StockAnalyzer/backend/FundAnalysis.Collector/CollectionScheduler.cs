@@ -18,6 +18,7 @@ public class CollectionScheduler(IServiceProvider services, ILogger<CollectionSc
 
         var lastDaily = DateTime.MinValue;
         var lastMinutes = DateTime.MinValue;
+        var lastSentiment = DateTime.MinValue;
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -34,11 +35,13 @@ public class CollectionScheduler(IServiceProvider services, ILogger<CollectionSc
                     var collector = scope.ServiceProvider.GetRequiredService<CollectorService>();
                     var liquidity = scope.ServiceProvider.GetRequiredService<LiquidityService>();
                     var fundamentals = scope.ServiceProvider.GetRequiredService<FundamentalService>();
+                    var sentiment = scope.ServiceProvider.GetRequiredService<MarketSentimentService>();
                     await collector.SyncWatchlistDailyAsync();
                     await liquidity.SyncAllAsync();
                     await collector.SyncIndicesAsync();
                     await collector.SyncMarketIndicatorsAsync();
                     await fundamentals.SyncAllAsync();
+                    await sentiment.SyncAsync();
                     lastDaily = now;
                     logger.LogInformation("每日全量同步完成");
                 }
@@ -50,6 +53,15 @@ public class CollectionScheduler(IServiceProvider services, ILogger<CollectionSc
                     await collector.SyncWatchlistMinutesAsync();
                     await collector.SyncIndexIntradayAsync();
                     lastMinutes = now;
+                }
+
+                // 盘中情绪快照：每 10 分钟更新当日涨跌家数 / 涨停跌停 / 成交额
+                if (weekday && inTrading && (now - lastSentiment).TotalMinutes >= 10)
+                {
+                    using var scope = services.CreateScope();
+                    var sentiment = scope.ServiceProvider.GetRequiredService<MarketSentimentService>();
+                    await sentiment.SyncAsync();
+                    lastSentiment = now;
                 }
             }
             catch (Exception ex)

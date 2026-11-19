@@ -198,3 +198,45 @@ public record LiquidityOverviewDto(
     double M2YoY, double M1YoY, double M0YoY,
     double Lpr1Y, double Lpr5Y, string LatestLprDate,
     double ReserveLarge, double ReserveSmall, string LatestReserveDate);
+
+// ---------- 市场情绪 ----------
+
+/// <summary>单个交易日的市场情绪快照。金额单位：亿元，涨跌幅单位：%。</summary>
+public record SentimentSnapshotDto(
+    string Date,
+    int UpCount, int DownCount, int FlatCount,
+    int Up5Count, int Down5Count,
+    int LimitUpCount, int LimitDownCount, int BrokenBoardCount, int MaxBoardStreak,
+    double TotalAmount, double AvgChangePct, double MedianChangePct,
+    double SentimentScore, string Level, string Advice,
+    string? BasisDate,
+    /// <summary>与上一交易日相比的情绪分变化。</summary>
+    double? ScoreChange,
+    /// <summary>与上一交易日相比的成交额变化（%）。</summary>
+    double? AmountChangePct);
+
+public record SentimentOverviewDto(SentimentSnapshotDto? Latest);
+
+/// <summary>情绪历史趋势点。</summary>
+public record SentimentHistoryPointDto(
+    string Date, double SentimentScore,
+    int UpCount, int DownCount, int FlatCount,
+    int LimitUpCount, int LimitDownCount, int BrokenBoardCount, int MaxBoardStreak,
+    double TotalAmount, double AvgChangePct);
+
+public record SentimentHistoryDto(List<SentimentHistoryPointDto> Points);
+
+/// <summary>行业冷暖：平均涨跌幅、上涨占比与涨停/跌停家数。</summary>
+public record SentimentIndustryDto(
+    string Industry, int Count, double AvgChangePct, double UpRatio,
+    int LimitUpCount, int LimitDownCount);
+
+/// <summary>全市场涨跌幅分布分桶。</summary>
+public record SentimentBucketDto(string Label, int Count);
+
+public record SentimentStructureDto(
+    string? BasisDate,
+    int TotalStocks,
+    List<SentimentIndustryDto> TopIndustries,
+    List<SentimentIndustryDto> BottomIndustries,
+    List<SentimentBucketDto> Distribution);

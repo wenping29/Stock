@@ -359,6 +359,70 @@ namespace FundAnalysis.Migrations
                     b.ToTable("MarketIndicators");
                 });
 
+            modelBuilder.Entity("FundAnalysis.Models.MarketSentimentDaily", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<double>("AvgChangePct")
+                        .HasColumnType("double precision");
+
+                    b.Property<DateTime>("BasisDate")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("BrokenBoardCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("Down5Count")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("DownCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("FlatCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("LimitDownCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("LimitUpCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("MaxBoardStreak")
+                        .HasColumnType("integer");
+
+                    b.Property<double>("MedianChangePct")
+                        .HasColumnType("double precision");
+
+                    b.Property<double>("SentimentScore")
+                        .HasColumnType("double precision");
+
+                    b.Property<double>("TotalAmount")
+                        .HasColumnType("double precision");
+
+                    b.Property<int>("Up5Count")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("UpCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Date")
+                        .IsUnique();
+
+                    b.ToTable("MarketSentimentDailies");
+                });
+
             modelBuilder.Entity("FundAnalysis.Models.MoneyFlowDaily", b =>
                 {
                     b.Property<long>("Id")

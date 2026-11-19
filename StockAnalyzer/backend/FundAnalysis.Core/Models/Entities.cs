@@ -287,3 +287,48 @@ public class IndexIntraday
     /// <summary>当日累计均价（服务端按分钟价累加计算）。</summary>
     public double Avg { get; set; }
 }
+
+// ---------- 市场情绪 ----------
+
+/// <summary>
+/// 每交易日一条的市场情绪快照（盘中每 10 分钟更新当日行，收盘后补齐为最终值）。
+/// 涨跌家数 / 成交额取东财指数实时统计；涨停跌停炸板取东财涨停板行情池；
+/// 涨跌分布与行业冷暖取库内全市场基本面快照（StockFundamental）。
+/// </summary>
+public class MarketSentimentDaily
+{
+    public long Id { get; set; }
+    /// <summary>交易日（唯一）。</summary>
+    public DateTime Date { get; set; }
+
+    // ---------- 全市场涨跌家数 ----------
+    public int UpCount { get; set; }
+    public int DownCount { get; set; }
+    public int FlatCount { get; set; }
+    /// <summary>涨幅 ≥5% / 跌幅 ≤-5% 家数（基于基本面快照）。</summary>
+    public int Up5Count { get; set; }
+    public int Down5Count { get; set; }
+
+    // ---------- 涨停板情绪 ----------
+    public int LimitUpCount { get; set; }
+    public int LimitDownCount { get; set; }
+    /// <summary>炸板家数（曾触及涨停、收盘未封住）。</summary>
+    public int BrokenBoardCount { get; set; }
+    /// <summary>当日最高连板数（涨停池最大连板高度）。</summary>
+    public int MaxBoardStreak { get; set; }
+
+    // ---------- 量能与涨跌强度 ----------
+    /// <summary>沪深两市成交额（亿元）。</summary>
+    public double TotalAmount { get; set; }
+    /// <summary>全市场平均涨跌幅（%）。</summary>
+    public double AvgChangePct { get; set; }
+    /// <summary>全市场涨跌幅中位数（%）。</summary>
+    public double MedianChangePct { get; set; }
+
+    /// <summary>综合情绪温度分（0-100，越高越热）。</summary>
+    public double SentimentScore { get; set; }
+    /// <summary>涨跌分布与行业统计所用基本面快照日期（DateTime.MinValue = 当日无快照）。</summary>
+    public DateTime BasisDate { get; set; } = DateTime.MinValue;
+
+    public DateTime UpdatedAt { get; set; } = DateTime.Now;
+}

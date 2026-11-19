@@ -137,6 +137,7 @@ builder.Services.AddScoped<FundamentalService>();
 builder.Services.AddScoped<FundService>();
 builder.Services.AddScoped<FundEstimateService>();
 builder.Services.AddScoped<AlertService>();
+builder.Services.AddScoped<MarketSentimentService>();
 builder.Services.AddScoped<TokenService>();
 
 // ---------- Swagger + CORS ----------
@@ -233,6 +234,13 @@ if (!EF.IsDesignTime)
         {
             var bg = scope.ServiceProvider.GetRequiredService<IBackgroundJobClient>();
             bg.Enqueue<FundService>(s => s.SyncFundListAsync());
+        }
+
+        // 首次启动时生成当日市场情绪快照
+        if (!db.MarketSentimentDailies.Any())
+        {
+            var bg = scope.ServiceProvider.GetRequiredService<IBackgroundJobClient>();
+            bg.Enqueue<MarketSentimentService>(s => s.SyncAsync());
         }
         }
         else

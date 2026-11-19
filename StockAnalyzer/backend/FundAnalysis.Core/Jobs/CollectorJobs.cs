@@ -51,5 +51,13 @@ public static class CollectorJobs
         // 全量基金清单（类型/名称）：每周日 9:00
         jobs.AddOrUpdate<FundService>(
             "fund-list-sync", s => s.SyncFundListAsync(), Cron.Weekly(DayOfWeek.Sunday, 9));
+
+        // 市场情绪：交易时段每 10 分钟更新当日快照（涨跌家数 / 涨停跌停 / 成交额）
+        jobs.AddOrUpdate<MarketSentimentService>(
+            "sentiment-intraday", s => s.SyncAsync(), "*/10 9-15 * * 1-5");
+
+        // 市场情绪：收盘后（基本面 17:10 更新完成后）补齐当日最终值
+        jobs.AddOrUpdate<MarketSentimentService>(
+            "sentiment-close", s => s.SyncAsync(), "25 17 * * 1-5");
     }
 }

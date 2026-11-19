@@ -15,6 +15,7 @@ const router = createRouter({
     { path: '/watchlist', component: () => import('../views/WatchlistView.vue') },
     { path: '/screener', component: () => import('../views/ScreenerView.vue') },
     { path: '/liquidity', component: () => import('../views/LiquidityView.vue') },
+    { path: '/sentiment', component: () => import('../views/SentimentView.vue') },
     { path: '/analysis/:symbol', component: () => import('../views/AnalysisView.vue'), props: true },
     { path: '/admin', component: () => import('../views/AdminView.vue'), meta: { admin: true } },
     { path: '/:pathMatch(.*)*', component: () => import('../views/NotFoundView.vue') },

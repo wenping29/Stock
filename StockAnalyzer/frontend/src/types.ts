@@ -386,3 +386,77 @@ export interface OmoItem {
 export interface OmoData {
   items: OmoItem[]
 }
+
+// ---------- 市场情绪 ----------
+
+export interface SentimentSnapshot {
+  date: string
+  upCount: number
+  downCount: number
+  flatCount: number
+  up5Count: number
+  down5Count: number
+  limitUpCount: number
+  limitDownCount: number
+  brokenBoardCount: number
+  maxBoardStreak: number
+  /** 两市成交额（亿元）。 */
+  totalAmount: number
+  /** 全市场平均涨跌幅（%）。 */
+  avgChangePct: number
+  /** 全市场涨跌幅中位数（%）。 */
+  medianChangePct: number
+  /** 情绪温度分（0-100）。 */
+  sentimentScore: number
+  level: string
+  advice: string
+  /** 涨跌分布 / 行业统计所用基本面快照日期。 */
+  basisDate: string | null
+  scoreChange: number | null
+  amountChangePct: number | null
+}
+
+export interface SentimentOverview {
+  latest: SentimentSnapshot | null
+}
+
+export interface SentimentHistoryPoint {
+  date: string
+  sentimentScore: number
+  upCount: number
+  downCount: number
+  flatCount: number
+  limitUpCount: number
+  limitDownCount: number
+  brokenBoardCount: number
+  maxBoardStreak: number
+  totalAmount: number
+  avgChangePct: number
+}
+
+export interface SentimentHistory {
+  points: SentimentHistoryPoint[]
+}
+
+export interface SentimentIndustry {
+  industry: string
+  count: number
+  avgChangePct: number
+  /** 上涨家数占比（%）。 */
+  upRatio: number
+  limitUpCount: number
+  limitDownCount: number
+}
+
+export interface SentimentBucket {
+  label: string
+  count: number
+}
+
+export interface SentimentStructure {
+  basisDate: string | null
+  totalStocks: number
+  topIndustries: SentimentIndustry[]
+  bottomIndustries: SentimentIndustry[]
+  distribution: SentimentBucket[]
+}

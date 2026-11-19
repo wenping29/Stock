@@ -34,6 +34,7 @@ const menuItems = computed(() => {
     { path: '/funds', label: '📈 基金' },
     { path: '/watchlist', label: '⭐ 自选' },
     { path: '/screener', label: '🔍 选股' },
+    { path: '/sentiment', label: '🌡️ 情绪' },
     { path: '/liquidity', label: '🏦 流动性' },
   ]
   if (auth.isAdmin) list.push({ path: '/admin', label: '⚙️ 管理后台' })
