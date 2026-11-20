@@ -12,6 +12,8 @@ const props = withDefaults(defineProps<{
   usRateLabel?: string
   /** 美元利率（SOFR）叠加 */
   usdRateData?: { date: string; rate: number }[]
+  /** 人民币货币供应量 M0/M1/M2（单位：亿元，按月） */
+  moneySupplyData?: { month: string; m0: number; m1: number; m2: number }[]
   /** 主图下方叠加成交量柱状副图 */
   showVolume?: boolean
   height?: number
@@ -19,6 +21,7 @@ const props = withDefaults(defineProps<{
   usRateData: () => [],
   usRateLabel: '',
   usdRateData: () => [],
+  moneySupplyData: () => [],
   showVolume: false,
   height: 460,
 })
@@ -60,6 +63,14 @@ const el = ref<HTMLElement>()
 const chartType = ref<'candlestick' | 'line'>('candlestick')
 const showUsRate = ref(false)
 const showUsdRate = ref(false)
+
+type MoneyKey = 'M0' | 'M1' | 'M2'
+const MONEY_DEFS: { key: MoneyKey; label: string; field: 'm0' | 'm1' | 'm2'; color: string }[] = [
+  { key: 'M0', label: 'M0', field: 'm0', color: '#67c23a' },
+  { key: 'M1', label: 'M1', field: 'm1', color: '#e6a23c' },
+  { key: 'M2', label: 'M2', field: 'm2', color: '#409eff' },
+]
+const activeMoney = ref<Set<MoneyKey>>(new Set())
 const dateStart = ref('')
 const dateEnd = ref('')
 
@@ -126,6 +137,28 @@ function setPreset(months: number | 'all') {
 
 const hasUsRate = computed(() => props.usRateData.length > 0)
 const hasUsdRate = computed(() => props.usdRateData.length > 0)
+
+const hasMoney = computed(() => props.moneySupplyData.length > 0)
+
+/** 月度序列按 K 线日期对齐（取不晚于该日的最近一个月值）。 */
+function alignMonthly(kline: KlineData[], points: { month: string; value: number }[]): (number | null)[] {
+  const sorted = [...points].sort((a, b) => a.month.localeCompare(b.month))
+  const aligned: (number | null)[] = []
+  let idx = 0
+  for (const k of kline) {
+    const kd = toMs(toIsoDate(k.date))
+    while (idx < sorted.length - 1 && toMs(toIsoDate(sorted[idx + 1].month)) <= kd) idx++
+    aligned.push(sorted[idx] && toMs(toIsoDate(sorted[idx].month)) <= kd ? sorted[idx].value : null)
+  }
+  return aligned
+}
+
+function toggleMoney(k: MoneyKey) {
+  const next = new Set(activeMoney.value)
+  if (next.has(k)) next.delete(k)
+  else next.add(k)
+  activeMoney.value = next
+}
 
 /** 利率序列按 K 线日期对齐（取不晚于该日的最近一个值）。 */
 function alignRate(kline: KlineData[], series: { date: string; rate: number }[]): (number | null)[] {
@@ -264,12 +297,35 @@ const option = computed<EChartsOption | null>(() => {
     legendData.push('美元利率')
   }
 
+  // 人民币货币供应 M0/M1/M2：月度值阶梯对齐到 K 线，单位换算成万亿元走独立右侧轴
+  const moneyActive = MONEY_DEFS.filter((d) => activeMoney.value.has(d.key) && hasMoney.value)
+  const showMoney = moneyActive.length > 0
+  const moneyAxisIndex = hasRateAxis ? 2 : 1
+  for (const d of moneyActive) {
+    series.push({
+      name: `${d.label}(万亿)`,
+      type: 'line',
+      yAxisIndex: moneyAxisIndex,
+      data: alignMonthly(
+        kline,
+        props.moneySupplyData.map((p) => ({ month: p.month, value: p[d.field] / 10000 })),
+      ),
+      showSymbol: false,
+      connectNulls: true,
+      step: 'end',
+      lineStyle: { width: 1.4, color: d.color },
+      itemStyle: { color: d.color },
+    })
+    legendData.push(`${d.label}(万亿)`)
+  }
+
+  const volumeAxisIndex = 1 + (hasRateAxis ? 1 : 0) + (showMoney ? 1 : 0)
   if (props.showVolume) {
     series.push({
       name: '成交量',
       type: 'bar',
       xAxisIndex: 1,
-      yAxisIndex: hasRateAxis ? 2 : 1,
+      yAxisIndex: volumeAxisIndex,
       data: kline.map((d, i) => ({
         value: d.volume,
         itemStyle: { color: d.close >= (kline[i - 1]?.close ?? d.open) ? UP_COLOR : DOWN_COLOR },
@@ -277,7 +333,7 @@ const option = computed<EChartsOption | null>(() => {
     })
   }
 
-  const right = hasRateAxis ? 64 : 24
+  const right = hasRateAxis || showMoney ? 64 : 24
 
   return {
     animation: false,
@@ -340,6 +396,16 @@ const option = computed<EChartsOption | null>(() => {
             splitLine: { show: false },
           }]
         : []),
+      ...(showMoney
+        ? [{
+            type: 'value' as const,
+            min: 0,
+            name: '货币供应 万亿',
+            nameTextStyle: { fontSize: 10, color: '#606266' },
+            axisLabel: { fontSize: 10, color: '#606266' },
+            splitLine: { show: false },
+          }]
+        : []),
       ...(props.showVolume
         ? [{
             type: 'value' as const,
@@ -357,7 +423,10 @@ const option = computed<EChartsOption | null>(() => {
   }
 })
 
-useEChart(el, () => option.value, () => [filtered.value, chartType.value, showUsRate.value, showUsdRate.value, props.showVolume])
+useEChart(el, () => option.value, () => [
+  filtered.value, chartType.value, showUsRate.value, showUsdRate.value,
+  activeMoney.value, props.showVolume, props.moneySupplyData.length,
+])
 
 const presets: { label: string; val: number | 'all' }[] = [
   { label: '1月', val: 1 },
@@ -393,7 +462,15 @@ const presets: { label: string; val: number | 'all' }[] = [
         :class="{ active: showUsdRate }"
         @click="showUsdRate = !showUsdRate"
       >美元利率</button>
-      <!-- 附加工具（如技术指标开关），排在美债/美元利率按钮之后 -->
+      <button
+        v-for="m in (hasMoney ? MONEY_DEFS : [])"
+        :key="m.key"
+        class="us-toggle"
+        :class="{ active: activeMoney.has(m.key) }"
+        :title="`人民币${m.label}（万亿元，月度）`"
+        @click="toggleMoney(m.key)"
+      >{{ m.label }}</button>
+      <!-- 附加工具（如技术指标开关），排在美债/美元利率/M0·M1·M2 按钮之后 -->
       <slot name="toolbar" />
     </div>
     <div

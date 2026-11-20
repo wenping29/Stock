@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import type { IndexItem, IndexTrendData, KLinePoint } from '../types'
 import { fetchIndices, fetchIndexTrend } from '../api/quote'
+import { fetchMoneySupply } from '../api/liquidity'
 import { fetchIndexKline, fetchUsdRateHistory, fetchUsRateHistory, computeIndicators } from '../api/analysis'
 import type { IndicatorResult, KlineData, KlinePeriod } from '../types/analysis'
 import type { CollectCategory } from '../api/collect'
@@ -76,6 +77,7 @@ const quotePeriod = ref<PeriodKey>('day')
 const klineData = ref<KlineData[]>([])
 const usRate = ref<{ date: string; rate: number }[]>([])
 const usdRate = ref<{ date: string; rate: number }[]>([])
+const moneySupply = ref<{ month: string; m0: number; m1: number; m2: number }[]>([])
 const rateMaturity = ref('10Y')
 const dateRange = ref((() => {
   const end = new Date()
@@ -120,6 +122,13 @@ async function loadUsRate() {
 
 async function loadUsdRate() {
   try { usdRate.value = await fetchUsdRateHistory() } catch { /* 忽略 */ }
+}
+
+async function loadMoneySupply() {
+  try {
+    const res = await fetchMoneySupply(120)
+    moneySupply.value = res.points.map((p) => ({ month: p.month, m0: p.m0, m1: p.m1, m2: p.m2 }))
+  } catch { /* 忽略 */ }
 }
 
 // ---- 行情K线技术指标按钮：成交量 / MA / BOLL / MACD / RSI ----
@@ -305,6 +314,7 @@ onMounted(() => {
   load()
   loadUsRate()
   loadUsdRate()
+  loadMoneySupply()
 })
 </script>
 
@@ -384,6 +394,7 @@ onMounted(() => {
           :show-volume="activeInds.has('VOL')"
           :us-rate-data="usRate" :us-rate-label="rateMaturity"
           :usd-rate-data="usdRate"
+          :money-supply-data="moneySupply"
           @range-change="onQuoteRangeChange">
           <template #toolbar>
             <span v-for="b in IND_BUTTONS" :key="b.key"

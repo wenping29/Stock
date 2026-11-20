@@ -23,6 +23,7 @@ import {
   fetchUsRateHistory,
 } from '../../api/analysis'
 import { fetchIndices, fetchIndexTrend } from '../../api/quote'
+import { fetchMoneySupply } from '../../api/liquidity'
 import StockChart from '../../components/analysis/StockChart.vue'
 import IndicatorChart from '../../components/analysis/IndicatorChart.vue'
 import AnalysisLineChart from '../../components/analysis/AnalysisLineChart.vue'
@@ -41,6 +42,7 @@ const error = ref('')
 const macro = ref<MacroIndicator[]>([])
 const usRate = ref<{ date: string; rate: number }[]>([])
 const usdRate = ref<{ date: string; rate: number }[]>([])
+const moneySupply = ref<{ month: string; m0: number; m1: number; m2: number }[]>([])
 const rateMaturity = ref('10Y')
 const cnRate = ref<{ date: string; rate: number }[]>([])
 const cnRateType = ref('SHIBOR_3M')
@@ -336,6 +338,12 @@ async function loadUsdRate() {
 async function loadCnRate() {
   try { cnRate.value = await fetchCnRateHistory(cnRateType.value) } catch { /* 忽略 */ }
 }
+async function loadMoneySupply() {
+  try {
+    const res = await fetchMoneySupply(120)
+    moneySupply.value = res.points.map((p) => ({ month: p.month, m0: p.m0, m1: p.m1, m2: p.m2 }))
+  } catch { /* 忽略 */ }
+}
 async function loadUnified() {
   const [idx, oil, cn10] = await Promise.all([
     fetchIndexPeriodData(unifiedPeriod.value).catch(() => ({})),
@@ -359,6 +367,7 @@ function reloadAll() {
   loadUsRate()
   loadUsdRate()
   loadCnRate()
+  loadMoneySupply()
   loadUnified()
   loadFx()
   loadGold()
@@ -371,6 +380,7 @@ onMounted(() => {
   loadUsRate()
   loadUsdRate()
   loadCnRate()
+  loadMoneySupply()
   loadUnified()
   loadFx()
   loadGold()
@@ -533,6 +543,7 @@ const goldChart = computed(() => ({
             :us-rate-data="usRate"
             :us-rate-label="rateMaturity"
             :usd-rate-data="usdRate"
+            :money-supply-data="moneySupply"
             @range-change="onKlineRangeChange"
           >
             <template #toolbar>
