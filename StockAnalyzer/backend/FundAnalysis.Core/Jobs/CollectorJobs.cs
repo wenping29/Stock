@@ -44,6 +44,10 @@ public static class CollectorJobs
         jobs.AddOrUpdate<FundamentalService>(
             "fundamentals-sync", s => s.SyncAllAsync(), "10 17 * * 1-5");
 
+        // 行业板块主力资金流（全市场一次拉取）：交易日 16:55
+        jobs.AddOrUpdate<CollectorService>(
+            "sector-flow-sync", s => s.SyncSectorMoneyFlowAsync(), "55 16 * * 1-5");
+
         // 自选价格提醒检查：交易时段每 5 分钟
         jobs.AddOrUpdate<AlertService>(
             "alert-check", s => s.CheckAllAsync(), "*/5 9-15 * * 1-5");

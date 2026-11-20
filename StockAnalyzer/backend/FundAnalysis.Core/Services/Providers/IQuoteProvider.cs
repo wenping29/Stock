@@ -10,6 +10,9 @@ public record TrendPoint(DateTime Time, double Price, double Volume, double Avg)
 
 public record MoneyFlowItem(DateTime Date, double MainNet, double LargeNet, double MidNet, double SmallNet);
 
+/// <summary>行业板块资金流（单位：元）。</summary>
+public record SectorFlowItem(string Code, string Name, double MainNet, double Amount, double ChangePct);
+
 public record FundNavItem(DateTime Date, double Nav, double AccNav, double ChangePct);
 
 /// <summary>基金重仓股条目。SecMarket 为东财 secid 市场前缀（1=沪，0=深/北，116=港）。</summary>
@@ -54,6 +57,9 @@ public interface IQuoteProvider
 
     /// <summary>拉取每日资金流（主力/大单/中单/小单净流入，单位元）。</summary>
     Task<List<MoneyFlowItem>> FetchMoneyFlowAsync(string symbol, int secMarket, int days, CancellationToken ct = default);
+
+    /// <summary>拉取全市场行业板块当日主力资金流（一次请求返回全部行业板块，单位元）。</summary>
+    Task<List<SectorFlowItem>> FetchSectorMoneyFlowAsync(CancellationToken ct = default);
 
     /// <summary>拉取日内分时走势（trends2，ndays=1 = 最近一个交易日的全部分钟点）。</summary>
     Task<List<TrendPoint>> FetchTrendAsync(string symbol, int secMarket, CancellationToken ct = default);

@@ -186,6 +186,10 @@ public class TushareProvider(IHttpClientFactory factory, IConfiguration config, 
         return list.OrderBy(x => x.Date).ToList();
     }
 
+    // 行业板块资金流仅东财 clist 提供（Tushare 需逐板块调用且积分要求高），返回空由调用方跳过写入
+    public Task<List<SectorFlowItem>> FetchSectorMoneyFlowAsync(CancellationToken ct = default)
+        => Task.FromResult(new List<SectorFlowItem>());
+
     // Tushare 分钟级分时接口需要较高积分，暂不支持（返回空，由调用方降级展示）
     public Task<List<TrendPoint>> FetchTrendAsync(string symbol, int secMarket, CancellationToken ct = default)
         => Task.FromResult(new List<TrendPoint>());

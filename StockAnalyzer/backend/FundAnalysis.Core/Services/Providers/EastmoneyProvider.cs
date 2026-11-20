@@ -229,6 +229,41 @@ public class EastmoneyProvider(IHttpClientFactory factory) : IQuoteProvider
         return list;
     }
 
+    public async Task<List<SectorFlowItem>> FetchSectorMoneyFlowAsync(CancellationToken ct = default)
+    {
+        // 行业板块列表（fs=m:90+t:2），f12=板块代码，f14=名称，f3=涨跌幅%，f62=主力净流入（元），f6=成交额（元）
+        // clist 单页最多 100 条（东财行业板块约 500 个），按主力净流入降序翻页取全量
+        const string fs = "m:90+t:2";
+        const int pageSize = 100;
+        var list = new List<SectorFlowItem>();
+        var seen = new HashSet<string>();
+        using var client = NewClient();
+
+        for (var page = 1; page <= 10; page++)
+        {
+            var url = $"https://push2.eastmoney.com/api/qt/clist/get?pn={page}&pz={pageSize}&po=1&np=1&fltt=2&invt=2&fid=f62"
+                      + $"&fs={Uri.EscapeDataString(fs)}&fields=f12,f14,f3,f62,f6";
+            using var doc = JsonDocument.Parse(await GetWithRetryAsync(client, url, ct));
+            if (!doc.RootElement.TryGetProperty("data", out var data) || data.ValueKind == JsonValueKind.Null)
+                break;
+            if (!data.TryGetProperty("diff", out var diff) || diff.ValueKind != JsonValueKind.Array)
+                break;
+
+            var added = 0;
+            foreach (var row in diff.EnumerateArray())
+            {
+                var code = GetString(row, "f12");
+                var name = GetString(row, "f14");
+                if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(name) || !seen.Add(code)) continue;
+                list.Add(new SectorFlowItem(code, name, GetNum(row, "f62"), GetNum(row, "f6"), GetNum(row, "f3")));
+                added++;
+            }
+            // 本页无新增或不足一页，说明已到末页
+            if (added == 0 || diff.GetArrayLength() < pageSize) break;
+        }
+        return list;
+    }
+
     public async Task<List<FundNavItem>> FetchFundNavAsync(string fundCode, int pageSize, CancellationToken ct = default)
     {
         var list = new List<FundNavItem>();
@@ -505,4 +540,10 @@ public class EastmoneyProvider(IHttpClientFactory factory) : IQuoteProvider
 
     private static double Num(string? s)
         => double.TryParse(s, NumberStyles.Any, Cn, out var v) ? v : 0;
+
+    /// <summary>兼容数字与字符串（"-" 表示无数据）两种返回形态。</summary>
+    private static double GetNum(JsonElement obj, string name)
+        => obj.TryGetProperty(name, out var v)
+            ? v.ValueKind == JsonValueKind.Number ? v.GetDouble() : Num(v.GetString())
+            : 0;
 }

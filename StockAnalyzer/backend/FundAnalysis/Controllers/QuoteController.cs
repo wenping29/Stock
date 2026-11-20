@@ -519,4 +519,27 @@ public class QuoteController(
         if (result is null) return NotFound(new { message = $"未找到标的 {symbol} 的资金流数据（场外基金无资金流）" });
         return Ok(result);
     }
+
+    /// <summary>行业板块主力资金流（最新交易日快照，读采集表，金额单位：亿元）。</summary>
+    [Authorize]
+    [HttpGet("sector-moneyflow")]
+    public async Task<IActionResult> SectorMoneyFlow()
+    {
+        var latest = await db.SectorMoneyFlows.MaxAsync(x => (DateTime?)x.Date);
+        if (latest is null) return Ok(new SectorFlowDto(null, []));
+
+        var rows = await db.SectorMoneyFlows
+            .Where(x => x.Date == latest.Value)
+            .OrderByDescending(x => x.MainNet)
+            .ToListAsync();
+
+        var items = rows.Select(x => new SectorFlowItemDto(
+            x.Code,
+            x.Name,
+            Math.Round(x.MainNet / 1e8, 2),
+            Math.Round(x.Amount / 1e8, 2),
+            Math.Round(x.ChangePct, 2))).ToList();
+
+        return Ok(new SectorFlowDto(latest.Value.ToString("yyyy-MM-dd"), items));
+    }
 }

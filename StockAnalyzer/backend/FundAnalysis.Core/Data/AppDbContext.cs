@@ -19,6 +19,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
     public DbSet<FundHolding> FundHoldings => Set<FundHolding>();
     public DbSet<FundHoldingSync> FundHoldingSyncs => Set<FundHoldingSync>();
     public DbSet<MoneyFlowDaily> MoneyFlowDailies => Set<MoneyFlowDaily>();
+    public DbSet<SectorMoneyFlow> SectorMoneyFlows => Set<SectorMoneyFlow>();
     public DbSet<WatchlistItem> WatchlistItems => Set<WatchlistItem>();
     public DbSet<ShiborRate> ShiborRates => Set<ShiborRate>();
     public DbSet<MoneySupply> MoneySupplies => Set<MoneySupply>();
@@ -87,6 +88,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
         b.Entity<MoneyFlowDaily>(e =>
         {
             e.HasIndex(x => new { x.Symbol, x.Date }).IsUnique();
+        });
+
+        b.Entity<SectorMoneyFlow>(e =>
+        {
+            e.HasIndex(x => new { x.Code, x.Date }).IsUnique();
+            e.HasIndex(x => x.Date);
+            e.Property(x => x.Code).HasMaxLength(12);
+            e.Property(x => x.Name).HasMaxLength(40);
         });
 
         b.Entity<WatchlistItem>(e =>

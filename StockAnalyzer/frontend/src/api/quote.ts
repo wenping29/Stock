@@ -1,7 +1,7 @@
 import http from './http'
 import type {
   SearchItem, KLineResponse, PerformanceData, MoneyFlowData, WatchlistItem, AdminUser,
-  MarketIndex, MarketVolume, HsgtFlow, FxRate, Us10y, CnBond, IndexItem, IndexTrendData,
+  MarketIndex, MarketVolume, HsgtFlow, FxRate, Us10y, CnBond, IndexItem, IndexTrendData, SectorFlow,
 } from '../types'
 
 export async function fetchMarketOverview(): Promise<MarketIndex[]> {
@@ -23,6 +23,12 @@ export async function fetchMarketVolumeSeries(
 
 export async function fetchHsgtFlow(days = 30): Promise<HsgtFlow> {
   const { data } = await http.get('/quote/hsgt-flow', { params: { days } })
+  return data
+}
+
+/** 行业板块主力资金流（最新交易日快照，金额单位：亿元）。 */
+export async function fetchSectorFlow(): Promise<SectorFlow> {
+  const { data } = await http.get('/quote/sector-moneyflow')
   return data
 }
 

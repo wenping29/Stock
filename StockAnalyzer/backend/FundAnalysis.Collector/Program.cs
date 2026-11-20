@@ -66,6 +66,9 @@ if (mode != "daemon")
             case "sentiment":
                 await sentiment.SyncAsync();
                 break;
+            case "sector":
+                await collector.SyncSectorMoneyFlowAsync();
+                break;
             case "initial":
                 await collector.InitialSyncAsync();
                 await liquidity.SyncAllAsync();
@@ -76,6 +79,7 @@ if (mode != "daemon")
                 await liquidity.SyncAllAsync();
                 await collector.SyncIndicesAsync();
                 await collector.SyncMarketIndicatorsAsync();
+                await collector.SyncSectorMoneyFlowAsync();
                 await fundamentals.SyncAllAsync();
                 await sentiment.SyncAsync();
                 break;

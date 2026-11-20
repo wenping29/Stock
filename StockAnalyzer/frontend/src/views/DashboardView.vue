@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import type { MarketIndex, MarketVolume, HsgtFlow, FxRate, Us10y, CnBond, WatchlistItem, LiquidityOverview } from '../types'
-import { fetchMarketOverview, fetchMarketVolume, fetchHsgtFlow, fetchFxRate, fetchUs10y, fetchCnBond, fetchWatchlist } from '../api/quote'
+import type { MarketIndex, MarketVolume, HsgtFlow, FxRate, Us10y, CnBond, WatchlistItem, LiquidityOverview, SectorFlow } from '../types'
+import { fetchMarketOverview, fetchMarketVolume, fetchHsgtFlow, fetchFxRate, fetchUs10y, fetchCnBond, fetchWatchlist, fetchSectorFlow } from '../api/quote'
 import { fetchLiquidityOverview } from '../api/liquidity'
 import SparkLine from '../components/SparkLine.vue'
 import VolumeBarChart from '../components/VolumeBarChart.vue'
 import HsgtChart from '../components/HsgtChart.vue'
 import MultiLineChart from '../components/MultiLineChart.vue'
+import SectorFlowChart from '../components/SectorFlowChart.vue'
 
 const router = useRouter()
 
@@ -19,6 +20,7 @@ const us10y = ref<Us10y | null>(null)
 const cnBond = ref<CnBond | null>(null)
 const watchlist = ref<WatchlistItem[]>([])
 const liquidity = ref<LiquidityOverview | null>(null)
+const sectorFlow = ref<SectorFlow | null>(null)
 const loading = ref(true)
 
 // 自选统计
@@ -67,7 +69,7 @@ function fmtPct(v: number | null | undefined) {
 async function load() {
   loading.value = true
   try {
-    const [idx, vol, hf, fxr, u10, cnb, wl, liq] = await Promise.all([
+    const [idx, vol, hf, fxr, u10, cnb, wl, liq, sf] = await Promise.all([
       fetchMarketOverview(),
       fetchMarketVolume(30).catch(() => null),
       fetchHsgtFlow(30).catch(() => null),
@@ -76,6 +78,7 @@ async function load() {
       fetchCnBond(90).catch(() => null),
       fetchWatchlist().catch(() => [] as WatchlistItem[]),
       fetchLiquidityOverview().catch(() => null),
+      fetchSectorFlow().catch(() => null),
     ])
     indices.value = idx
     volume.value = vol
@@ -85,6 +88,7 @@ async function load() {
     cnBond.value = cnb
     watchlist.value = wl
     liquidity.value = liq
+    sectorFlow.value = sf
   } finally {
     loading.value = false
   }
@@ -245,6 +249,19 @@ onMounted(load)
               <div class="mini-label">存准率（大型）</div>
             </div>
           </div>
+        </div>
+
+        <!-- 行业板块资金流向：面积大小对应主力资金规模 -->
+        <div class="page-card" v-if="sectorFlow && sectorFlow.items.length">
+          <div class="card-head">
+            <h4>
+              行业板块资金流向
+              <span class="vol-change">主力净流入 · 面积越大资金规模越大</span>
+            </h4>
+            <span class="vol-change" v-if="sectorFlow.date">数据日期 {{ sectorFlow.date }}</span>
+          </div>
+          <SectorFlowChart :items="sectorFlow.items" />
+          <div class="hsgt-note">红色=主力净流入，绿色=净流出，颜色越深规模越大；单位为亿元</div>
         </div>
       </div>
     </div>

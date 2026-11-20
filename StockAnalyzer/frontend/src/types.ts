@@ -153,6 +153,20 @@ export interface HsgtFlow {
   points: HsgtPoint[]
 }
 
+/** 行业板块主力资金流（金额单位：亿元）。 */
+export interface SectorFlowItem {
+  code: string
+  name: string
+  mainNet: number
+  amount: number
+  changePct: number
+}
+
+export interface SectorFlow {
+  date: string | null
+  items: SectorFlowItem[]
+}
+
 export interface FxPoint {
   date: string
   rate: number

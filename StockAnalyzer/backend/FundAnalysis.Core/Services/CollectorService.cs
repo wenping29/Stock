@@ -456,6 +456,55 @@ public class CollectorService(AppDbContext db, IQuoteProvider provider, IConfigu
         await db.SaveChangesAsync();
     }
 
+    /// <summary>定时任务：同步全市场行业板块主力资金流（当日快照，按板块代码覆盖写入）。</summary>
+    [DisableConcurrentExecution(timeoutInSeconds: 120)]
+    public async Task SyncSectorMoneyFlowAsync()
+    {
+        try
+        {
+            var items = await provider.FetchSectorMoneyFlowAsync();
+            if (items.Count == 0)
+            {
+                logger.LogWarning("行业板块资金流为空，跳过写入");
+                return;
+            }
+
+            var date = DateTime.Now.Date;
+            var existing = (await db.SectorMoneyFlows
+                .Where(x => x.Date == date)
+                .ToListAsync()).ToDictionary(x => x.Code);
+
+            foreach (var item in items)
+            {
+                if (existing.TryGetValue(item.Code, out var row))
+                {
+                    row.Name = item.Name;
+                    row.MainNet = item.MainNet;
+                    row.Amount = item.Amount;
+                    row.ChangePct = item.ChangePct;
+                }
+                else
+                {
+                    db.SectorMoneyFlows.Add(new SectorMoneyFlow
+                    {
+                        Code = item.Code,
+                        Name = item.Name,
+                        Date = date,
+                        MainNet = item.MainNet,
+                        Amount = item.Amount,
+                        ChangePct = item.ChangePct,
+                    });
+                }
+            }
+            await db.SaveChangesAsync();
+            logger.LogInformation("行业板块资金流同步完成：{Count} 个板块", items.Count);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "行业板块资金流同步失败");
+        }
+    }
+
     /// <summary>所有用户自选 ∪ 配置中的示例标的。</summary>
     private string[] GetAllSymbols()
     {

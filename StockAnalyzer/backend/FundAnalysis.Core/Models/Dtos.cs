@@ -81,6 +81,11 @@ public record MarketVolumeDto(
     double? ChangePct,
     List<MarketVolumePointDto> Points);
 
+/// <summary>行业板块主力资金流（金额单位：亿元）。</summary>
+public record SectorFlowItemDto(string Code, string Name, double MainNet, double Amount, double ChangePct);
+
+public record SectorFlowDto(string? Date, List<SectorFlowItemDto> Items);
+
 /// <summary>人民币汇率（离岸 USDCNH）。数值上升 = 人民币贬值。Parity 为央行中间价（实时值）。</summary>
 public record FxPointDto(string Date, double Rate);
 

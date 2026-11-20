@@ -563,6 +563,46 @@ namespace FundAnalysis.Migrations
                     b.ToTable("ReserveRatios");
                 });
 
+            modelBuilder.Entity("FundAnalysis.Models.SectorMoneyFlow", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<double>("Amount")
+                        .HasColumnType("double precision");
+
+                    b.Property<double>("ChangePct")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<double>("MainNet")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Date");
+
+                    b.HasIndex("Code", "Date")
+                        .IsUnique();
+
+                    b.ToTable("SectorMoneyFlows");
+                });
+
             modelBuilder.Entity("FundAnalysis.Models.ShiborRate", b =>
                 {
                     b.Property<long>("Id")

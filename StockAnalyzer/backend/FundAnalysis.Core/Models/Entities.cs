@@ -113,6 +113,22 @@ public class MoneyFlowDaily
     public double SmallNet { get; set; }
 }
 
+/// <summary>行业板块资金流快照（东财行业板块，金额单位：元）。</summary>
+public class SectorMoneyFlow
+{
+    public long Id { get; set; }
+    /// <summary>板块代码（BKxxxx）。</summary>
+    public string Code { get; set; } = "";
+    public string Name { get; set; } = "";
+    public DateTime Date { get; set; }
+    /// <summary>主力净流入（正=流入，负=流出）。</summary>
+    public double MainNet { get; set; }
+    /// <summary>板块成交额。</summary>
+    public double Amount { get; set; }
+    /// <summary>板块涨跌幅（%）。</summary>
+    public double ChangePct { get; set; }
+}
+
 /// <summary>用户自选。</summary>
 public class WatchlistItem
 {
