@@ -5,12 +5,17 @@
 //   dotnet run -- --diag   （参数绑定诊断）
 using System.Data;
 using System.Text;
+using DataMigrator.Serve;
 using Microsoft.Data.Sqlite;
 using Npgsql;
 using NpgsqlTypes;
 
 // 与主应用一致的 PG 时间行为（本地时间直写）
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
+// --serve：实时行情常驻服务（取代 stock-analyzer/patch）；追加 --monitor 时启用监控 cron
+if (args.Contains("--serve"))
+    return await ServeMode.RunAsync(args, ServeMode.DefaultConnection);
 
 // --syncseq：迁移后重置全部 IDENTITY 序列到当前最大 Id（否则应用插入新行会主键冲突）
 if (args.Contains("--syncseq"))

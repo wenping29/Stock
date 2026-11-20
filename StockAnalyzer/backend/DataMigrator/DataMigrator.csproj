@@ -8,7 +8,22 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- serve 模式：HTTP 实时行情服务 / 复用 Core 的监控执行逻辑 -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="../FundAnalysis.Core/FundAnalysis.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 非 Web SDK 不含 ASP.NET Core 的隐式 using -->
+    <Using Include="Microsoft.Extensions.Configuration" />
+    <Using Include="Microsoft.Extensions.DependencyInjection" />
+    <Using Include="Microsoft.Extensions.Hosting" />
+    <Using Include="Microsoft.Extensions.Logging" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.13" />
+    <PackageReference Include="NCrontab" Version="3.4.0" />
     <PackageReference Include="Npgsql" Version="10.0.3" />
   </ItemGroup>
 
