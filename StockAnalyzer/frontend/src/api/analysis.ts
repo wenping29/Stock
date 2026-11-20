@@ -31,8 +31,8 @@ declare global {
   }
 }
 
-// 量化分析服务（stock-analyzer/server）：
-// - 默认走同源 /analysis-api，由 vite / nginx 代理到分析服务
+// 量化分析接口（已并入 FundAnalysis .NET 后端）：
+// - 默认走同源 /analysis-api，由 vite / nginx 代理到后端 /api
 // - 运行时可用 config.js 的 analysisApiBase 直连服务地址
 const ANALYSIS_API_BASE = window.__APP_CONFIG__?.analysisApiBase
   ? `${window.__APP_CONFIG__.analysisApiBase.replace(/\/+$/, '')}/api`

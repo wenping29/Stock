@@ -141,7 +141,7 @@ public sealed class MonitoringService(
         var scanPool = pool.Take(200).ToList();
         var start = new DateTime(2024, 1, 1);
         var end = DateTime.Today;
-        var batch = await data.GetKlineBatchAsync(scanPool, start, end, "daily", allowFetch: true, ct);
+        var batch = await data.GetKlineBatchAsync(scanPool, start, end, "daily", allowFetch: false, ct);
 
         var entrySignals = new List<EntrySignal>();
         foreach (var code in scanPool)

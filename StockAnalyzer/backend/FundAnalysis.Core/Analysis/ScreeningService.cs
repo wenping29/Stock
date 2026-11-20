@@ -55,9 +55,8 @@ public sealed class ScreeningService(AppDbContext db, AnalysisDataService data)
         var start = AnalysisDataService.ParseDate(startDate, new DateTime(2024, 1, 1));
         var end = AnalysisDataService.ParseDate(endDate, DateTime.Today);
         var p = AnalysisDataService.NormalizePeriod(period);
-        var allowFetch = stocks.Count <= 500;
-
-        var klines = await data.GetKlineBatchAsync(stocks.Select(x => x.Symbol).ToList(), start, end, p, allowFetch, ct);
+        // 全市场筛选只读库内数据，逐票回源会导致数百次串行请求。
+        var klines = await data.GetKlineBatchAsync(stocks.Select(x => x.Symbol).ToList(), start, end, p, false, ct);
         var results = new List<ScreeningResultDto>();
         foreach (var stock in stocks)
         {

@@ -6,14 +6,14 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': { target: 'http://43.142.147.244:9999', changeOrigin: true },
-      // 量化分析服务（stock-analyzer/server）：/analysis-api/* -> http://localhost:3001/api/*
+      // '/api': { target: 'http://43.142.147.244:9999', changeOrigin: true },
+      // 量化分析接口已并入 FundAnalysis .NET 后端：/analysis-api/* -> http://localhost:5000/api/*
       '/analysis-api': {
-        target: 'http://localhost:3001',
+        target: 'http://localhost:5000',
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/analysis-api/, '/api'),
       },
-      // '/api': { target: 'http://localhost:5000', changeOrigin: true },
+      '/api': { target: 'http://localhost:5000', changeOrigin: true },
     },
   },
 })

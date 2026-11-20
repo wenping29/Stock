@@ -84,7 +84,7 @@ public static class OptimizationEngine
                 {
                     InsampleStart = insampleData[0].Date,
                     InsampleEnd = insampleData[^1].Date,
-                    OutsampleStart = outsampleData[insampleEnd].Date,
+                    OutsampleStart = outsampleData[insampleDays].Date,
                     OutsampleEnd = outsampleData[^1].Date,
                 },
                 InsampleBest = best,
