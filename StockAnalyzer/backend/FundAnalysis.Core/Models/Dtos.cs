@@ -122,8 +122,10 @@ public record CnBondDto(
     double? MonthChangeBp,
     List<CnBondPointDto> Points);
 
-/// <summary>指数页面清单项。Amount 为当日成交额（亿元）。</summary>
-public record IndexItemDto(string Code, string Name, string Group, double Price, double ChangePct, double Amount, List<double> Trend);
+/// <summary>指数页面清单项。Amount 为当日成交额（亿元）；MainInflow 为主力净流入（元，仅行业指数有值）。</summary>
+public record IndexItemDto(
+    string Code, string Name, string Group, double Price, double ChangePct, double Amount,
+    List<double> Trend, double? MainInflow = null);
 
 public record IndicesResponse(List<IndexItemDto> Items);
 

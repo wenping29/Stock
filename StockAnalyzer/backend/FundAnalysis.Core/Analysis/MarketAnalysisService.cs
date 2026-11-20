@@ -11,25 +11,6 @@ namespace FundAnalysis.Analysis;
 /// </summary>
 public sealed class MarketAnalysisService(AppDbContext db, AnalysisDataService data)
 {
-    public static readonly (string Code, string Name)[] Indexes =
-    [
-        ("sh000001", "上证指数"),
-        ("sz399001", "深证成指"),
-        ("sz399006", "创业板指"),
-        ("sh000300", "沪深300"),
-        ("sh000016", "上证50"),
-        ("sh000905", "中证500"),
-        ("sh000688", "科创50"),
-        ("sh000933", "医药"),
-        ("sz399997", "白酒"),
-        ("sz980017", "半导体"),
-        ("sz399986", "银行"),
-        ("sz399393", "地产"),
-    ];
-
-    private static readonly Dictionary<string, string> IndexNames =
-        Indexes.ToDictionary(x => x.Code, x => x.Name);
-
     public static readonly string[] Periods = ["daily", "weekly", "monthly", "quarterly", "yearly"];
 
     public static readonly string[] UsMaturities = ["3M", "6M", "1Y", "10Y"];
@@ -39,36 +20,6 @@ public sealed class MarketAnalysisService(AppDbContext db, AnalysisDataService d
 
     // ---------- 大盘指数 ----------
 
-    public async Task<List<object>> GetIndexQuotesAsync(CancellationToken ct = default)
-    {
-        var list = new List<object>();
-        foreach (var (code, name) in Indexes)
-        {
-            var digits = code[2..];
-            var row = await db.IndexDailies.AsNoTracking()
-                .Where(x => x.Code == digits)
-                .OrderByDescending(x => x.Date)
-                .FirstOrDefaultAsync(ct);
-            if (row is null) continue;
-
-            var market = code[..2].ToUpperInvariant();
-            list.Add(new
-            {
-                code,
-                name,
-                market,
-                price = row.Close,
-                changePct = row.ChangePct,
-                volume = row.Volume,
-                high = row.High,
-                low = row.Low,
-                amount = row.Amount,
-                mainInflow = (double?)null,
-            });
-        }
-        return list;
-    }
-
     public async Task<List<AnalysisKline>> GetIndexKlineAsync(
         string code, string? start, string? end, string period, int? limit = null, CancellationToken ct = default)
         => await data.GetIndexKlineAsync(NormalizeIndexCode(code), start, end, period, limit, ct);
@@ -76,14 +27,14 @@ public sealed class MarketAnalysisService(AppDbContext db, AnalysisDataService d
     public async Task<Dictionary<string, object>> GetIndexPeriodDataAsync(
         string period, string[]? codes, string? start, string? end, CancellationToken ct = default)
     {
-        var requested = codes is { Length: > 0 } ? codes : IndexNames.Keys.ToArray();
+        var requested = codes is { Length: > 0 } ? codes : MarketIndices.MarketOverviewCodes;
         var result = new Dictionary<string, object>();
         foreach (var code in requested)
         {
             var rows = await data.GetIndexKlineAsync(NormalizeIndexCode(code), start, end, period, ct: ct);
             result[code] = new
             {
-                name = IndexNames.GetValueOrDefault(code, code),
+                name = CatalogName(code),
                 data = rows.Select(ToSeriesPoint).ToList(),
             };
         }
@@ -281,6 +232,19 @@ public sealed class MarketAnalysisService(AppDbContext db, AnalysisDataService d
 
     // ---------- 工具 ----------
 
+    /// <summary>按目录查指数名（兼容 sh000001 前缀写法）。</summary>
+    private static string CatalogName(string code)
+    {
+        var digits = code.Length == 8 && IsPrefixed(code) ? code[2..] : code;
+        var hit = MarketIndices.List.FirstOrDefault(i => string.Equals(i.Code, digits, StringComparison.OrdinalIgnoreCase));
+        return hit.Name ?? code;
+    }
+
+    private static bool IsPrefixed(string code) => code.Length == 8 &&
+        (code.StartsWith("sh", StringComparison.OrdinalIgnoreCase) ||
+         code.StartsWith("sz", StringComparison.OrdinalIgnoreCase) ||
+         code.StartsWith("bj", StringComparison.OrdinalIgnoreCase));
+
     private static object ToSeriesPoint(AnalysisKline k) => new
     {
         date = k.Date,
@@ -296,10 +260,19 @@ public sealed class MarketAnalysisService(AppDbContext db, AnalysisDataService d
         code = code.Trim();
         if (AnalysisDataService.IsIndexCode(code)) return code.ToLowerInvariant();
 
-        // 内置指数清单中的无前缀代码（HSI/NDX/DJIA/SPX 等跨境指数）
+        // 内置指数清单：纯数字代码补市场前缀（60min 周期依赖前缀判定为指数），跨境代码原样返回
         var known = MarketIndices.List.FirstOrDefault(i =>
             string.Equals(i.Code, code, StringComparison.OrdinalIgnoreCase));
-        if (known.Code is not null) return known.Code;
+        if (known.Code is not null)
+        {
+            if (!known.Code.All(char.IsDigit)) return known.Code;
+            return known.Market switch
+            {
+                1 => "sh" + known.Code,
+                0 => "sz" + known.Code,
+                _ => known.Code,
+            };
+        }
 
         if (code.Length != 6 || !code.All(char.IsDigit))
             throw new AnalysisRequestException($"未知指数 {code}");
