@@ -4,7 +4,7 @@ import { useRoute } from 'vue-router'
 import type { IndexItem, IndexTrendData, KLinePoint } from '../types'
 import { fetchIndices, fetchIndexTrend } from '../api/quote'
 import { fetchMoneySupply } from '../api/liquidity'
-import { fetchIndexKline, fetchUsdRateHistory, fetchUsRateHistory, computeIndicators } from '../api/analysis'
+import { fetchCnRateHistory, fetchIndexKline, fetchUsdRateHistory, fetchUsRateHistory, computeIndicators } from '../api/analysis'
 import type { IndicatorResult, KlineData, KlinePeriod } from '../types/analysis'
 import type { CollectCategory } from '../api/collect'
 import RefreshButton from '../components/RefreshButton.vue'
@@ -77,6 +77,7 @@ const quotePeriod = ref<PeriodKey>('day')
 const klineData = ref<KlineData[]>([])
 const usRate = ref<{ date: string; rate: number }[]>([])
 const usdRate = ref<{ date: string; rate: number }[]>([])
+const cnRateOverlay = ref<{ date: string; rate: number }[]>([])
 const moneySupply = ref<{ month: string; m0: number; m1: number; m2: number }[]>([])
 const rateMaturity = ref('10Y')
 const dateRange = ref((() => {
@@ -129,6 +130,10 @@ async function loadMoneySupply() {
     const res = await fetchMoneySupply(120)
     moneySupply.value = res.points.map((p) => ({ month: p.month, m0: p.m0, m1: p.m1, m2: p.m2 }))
   } catch { /* 忽略 */ }
+}
+
+async function loadCnRateOverlay() {
+  try { cnRateOverlay.value = await fetchCnRateHistory('CN_10Y') } catch { /* 忽略 */ }
 }
 
 // ---- 行情K线技术指标按钮：成交量 / MA / BOLL / MACD / RSI ----
@@ -314,6 +319,7 @@ onMounted(() => {
   load()
   loadUsRate()
   loadUsdRate()
+  loadCnRateOverlay()
   loadMoneySupply()
 })
 </script>
@@ -359,7 +365,7 @@ onMounted(() => {
             {{ PERIOD_LABELS[p] }}
           </span>
         </div>
-        <span class="chart-title">预设 1月/3月/6月/1年/全部 · 自定义起止日期 · K线 / 折线切换 · 美债/美元利率叠加（图表右上角可全屏）</span>
+        <span class="chart-title">预设 1月/3月/6月/1年/全部 · 自定义起止日期 · K线 / 折线切换 · 美债/美元利率/人民币利率叠加（图表右上角可全屏）</span>
       </div>
 
       <!-- K 线类 Tab 的周期切换 -->
@@ -394,6 +400,7 @@ onMounted(() => {
           :show-volume="activeInds.has('VOL')"
           :us-rate-data="usRate" :us-rate-label="rateMaturity"
           :usd-rate-data="usdRate"
+          :cn-rate-data="cnRateOverlay"
           :money-supply-data="moneySupply"
           @range-change="onQuoteRangeChange">
           <template #toolbar>

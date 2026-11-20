@@ -12,6 +12,8 @@ const props = withDefaults(defineProps<{
   usRateLabel?: string
   /** 美元利率（SOFR）叠加 */
   usdRateData?: { date: string; rate: number }[]
+  /** 人民币利率（中债 10Y）叠加 */
+  cnRateData?: { date: string; rate: number }[]
   /** 人民币货币供应量 M0/M1/M2（单位：亿元，按月） */
   moneySupplyData?: { month: string; m0: number; m1: number; m2: number }[]
   /** 主图下方叠加成交量柱状副图 */
@@ -21,6 +23,7 @@ const props = withDefaults(defineProps<{
   usRateData: () => [],
   usRateLabel: '',
   usdRateData: () => [],
+  cnRateData: () => [],
   moneySupplyData: () => [],
   showVolume: false,
   height: 460,
@@ -63,6 +66,7 @@ const el = ref<HTMLElement>()
 const chartType = ref<'candlestick' | 'line'>('candlestick')
 const showUsRate = ref(false)
 const showUsdRate = ref(false)
+const showCnRate = ref(false)
 
 type MoneyKey = 'M0' | 'M1' | 'M2'
 const MONEY_DEFS: { key: MoneyKey; label: string; field: 'm0' | 'm1' | 'm2'; color: string }[] = [
@@ -137,6 +141,7 @@ function setPreset(months: number | 'all') {
 
 const hasUsRate = computed(() => props.usRateData.length > 0)
 const hasUsdRate = computed(() => props.usdRateData.length > 0)
+const hasCnRate = computed(() => props.cnRateData.length > 0)
 
 const hasMoney = computed(() => props.moneySupplyData.length > 0)
 
@@ -267,7 +272,15 @@ const option = computed<EChartsOption | null>(() => {
 
   const showTreasury = showUsRate.value && hasUsRate.value
   const showUsd = showUsdRate.value && hasUsdRate.value
-  const hasRateAxis = showTreasury || showUsd
+  const showCn = showCnRate.value && hasCnRate.value
+  const hasRateAxis = showTreasury || showUsd || showCn
+  const rateAxisCount = [showTreasury, showUsd, showCn].filter(Boolean).length
+  const rateAxisName = rateAxisCount > 1
+    ? '利率 %'
+    : showTreasury ? '美债利率 %' : showUsd ? '美元利率 %' : '人民币利率 %'
+  const rateAxisColor = rateAxisCount > 1
+    ? '#606266'
+    : showTreasury ? '#409eff' : showUsd ? '#00897b' : '#d81b60'
 
   if (showTreasury) {
     series.push({
@@ -295,6 +308,20 @@ const option = computed<EChartsOption | null>(() => {
       itemStyle: { color: '#00897b' },
     })
     legendData.push('美元利率')
+  }
+
+  if (showCn) {
+    series.push({
+      name: '人民币利率',
+      type: 'line',
+      yAxisIndex: 1,
+      data: alignRate(kline, props.cnRateData),
+      showSymbol: false,
+      connectNulls: true,
+      lineStyle: { width: 1.4, type: 'dashed', color: '#d81b60' },
+      itemStyle: { color: '#d81b60' },
+    })
+    legendData.push('人民币利率')
   }
 
   // 人民币货币供应 M0/M1/M2：月度值阶梯对齐到 K 线，单位换算成万亿元走独立右侧轴
@@ -333,7 +360,9 @@ const option = computed<EChartsOption | null>(() => {
     })
   }
 
-  const right = hasRateAxis || showMoney ? 64 : 24
+  // 利率轴与货币轴同在右侧时错开排列，避免刻度与轴名互相覆盖
+  const stackedAxes = hasRateAxis && showMoney
+  const right = stackedAxes ? 124 : hasRateAxis || showMoney ? 64 : 24
 
   return {
     animation: false,
@@ -390,9 +419,9 @@ const option = computed<EChartsOption | null>(() => {
         ? [{
             type: 'value' as const,
             scale: true,
-            name: showTreasury && showUsd ? '利率 %' : showTreasury ? '美债利率 %' : '美元利率 %',
-            nameTextStyle: { fontSize: 10, color: showTreasury ? '#409eff' : '#00897b' },
-            axisLabel: { fontSize: 10, color: showTreasury ? '#409eff' : '#00897b' },
+            name: rateAxisName,
+            nameTextStyle: { fontSize: 10, color: rateAxisColor },
+            axisLabel: { fontSize: 10, color: rateAxisColor },
             splitLine: { show: false },
           }]
         : []),
@@ -400,6 +429,7 @@ const option = computed<EChartsOption | null>(() => {
         ? [{
             type: 'value' as const,
             min: 0,
+            offset: stackedAxes ? 58 : 0,
             name: '货币供应 万亿',
             nameTextStyle: { fontSize: 10, color: '#606266' },
             axisLabel: { fontSize: 10, color: '#606266' },
@@ -424,8 +454,8 @@ const option = computed<EChartsOption | null>(() => {
 })
 
 useEChart(el, () => option.value, () => [
-  filtered.value, chartType.value, showUsRate.value, showUsdRate.value,
-  activeMoney.value, props.showVolume, props.moneySupplyData.length,
+  filtered.value, chartType.value, showUsRate.value, showUsdRate.value, showCnRate.value,
+  activeMoney.value, props.showVolume, props.moneySupplyData.length, props.cnRateData.length,
 ])
 
 const presets: { label: string; val: number | 'all' }[] = [
@@ -470,7 +500,14 @@ const presets: { label: string; val: number | 'all' }[] = [
         :title="`人民币${m.label}（万亿元，月度）`"
         @click="toggleMoney(m.key)"
       >{{ m.label }}</button>
-      <!-- 附加工具（如技术指标开关），排在美债/美元利率/M0·M1·M2 按钮之后 -->
+      <button
+        v-if="hasCnRate"
+        class="us-toggle"
+        :class="{ active: showCnRate }"
+        title="中债 10 年期国债收益率（CN_10Y）"
+        @click="showCnRate = !showCnRate"
+      >人民币利率</button>
+      <!-- 附加工具（如技术指标开关），排在美债/美元利率/M0·M1·M2/人民币利率 按钮之后 -->
       <slot name="toolbar" />
     </div>
     <div

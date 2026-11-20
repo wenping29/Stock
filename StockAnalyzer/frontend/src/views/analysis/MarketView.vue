@@ -46,6 +46,7 @@ const moneySupply = ref<{ month: string; m0: number; m1: number; m2: number }[]>
 const rateMaturity = ref('10Y')
 const cnRate = ref<{ date: string; rate: number }[]>([])
 const cnRateType = ref('SHIBOR_3M')
+const cnRateOverlay = ref<{ date: string; rate: number }[]>([])
 
 const unifiedPeriod = ref('daily')
 const indexPeriodData = ref<Record<string, { name: string; data: PriceSeriesPoint[] }>>({})
@@ -344,6 +345,9 @@ async function loadMoneySupply() {
     moneySupply.value = res.points.map((p) => ({ month: p.month, m0: p.m0, m1: p.m1, m2: p.m2 }))
   } catch { /* 忽略 */ }
 }
+async function loadCnRateOverlay() {
+  try { cnRateOverlay.value = await fetchCnRateHistory('CN_10Y') } catch { /* 忽略 */ }
+}
 async function loadUnified() {
   const [idx, oil, cn10] = await Promise.all([
     fetchIndexPeriodData(unifiedPeriod.value).catch(() => ({})),
@@ -367,6 +371,7 @@ function reloadAll() {
   loadUsRate()
   loadUsdRate()
   loadCnRate()
+  loadCnRateOverlay()
   loadMoneySupply()
   loadUnified()
   loadFx()
@@ -380,6 +385,7 @@ onMounted(() => {
   loadUsRate()
   loadUsdRate()
   loadCnRate()
+  loadCnRateOverlay()
   loadMoneySupply()
   loadUnified()
   loadFx()
@@ -543,6 +549,7 @@ const goldChart = computed(() => ({
             :us-rate-data="usRate"
             :us-rate-label="rateMaturity"
             :usd-rate-data="usdRate"
+            :cn-rate-data="cnRateOverlay"
             :money-supply-data="moneySupply"
             @range-change="onKlineRangeChange"
           >
