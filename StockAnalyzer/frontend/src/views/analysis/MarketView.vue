@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import type {
   KlineData,
   KlinePeriod,
   MacroIndicator,
   PriceSeriesPoint,
-  RealtimeQuote,
 } from '../../types/analysis'
+import type { IndexItem, IndexTrendData, KLinePoint } from '../../types'
 import {
   analysisErrorMessage,
   fetchCn10y,
@@ -17,14 +17,17 @@ import {
   fetchIndexKline,
   fetchIndexPeriodData,
   fetchMacroIndicators,
-  fetchMarketIndexes,
   fetchUsRateHistory,
 } from '../../api/analysis'
+import { fetchIndices, fetchIndexTrend } from '../../api/quote'
 import StockChart from '../../components/analysis/StockChart.vue'
 import AnalysisLineChart from '../../components/analysis/AnalysisLineChart.vue'
+import KLineChart from '../../components/KLineChart.vue'
+import MarketMatrixChart from '../../components/MarketMatrixChart.vue'
+import IntradayTrendChart from '../../components/IntradayTrendChart.vue'
 
-const indexes = ref<RealtimeQuote[]>([])
-const selected = ref<RealtimeQuote | null>(null)
+const indexes = ref<IndexItem[]>([])
+const selected = ref<IndexItem | null>(null)
 const klineData = ref<KlineData[]>([])
 const period = ref<KlinePeriod>('daily')
 const loading = ref(true)
@@ -82,16 +85,20 @@ function pctClass(v: number | null | undefined) {
 function signedPct(v: number) {
   return `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`
 }
-function inflowText(v?: number) {
-  if (v == null) return '净流入 --'
-  return `净流入 ${v >= 0 ? '+' : ''}${(v / 1e8).toFixed(2)}亿`
+// 卡片半宽后放不下“净流入”前缀，只显示带符号金额，完整说明放 title
+function inflowText(v?: number | null) {
+  if (v == null) return '--'
+  return `${v >= 0 ? '+' : ''}${(v / 1e8).toFixed(2)}亿`
+}
+function inflowTitle(v?: number | null) {
+  return v == null ? '宽基指数无板块资金流' : `主力净流入 ${v >= 0 ? '+' : ''}${(v / 1e8).toFixed(2)}亿`
 }
 
 async function loadIndexes() {
   loading.value = true
   error.value = ''
   try {
-    const quotes = await fetchMarketIndexes()
+    const quotes = await fetchIndices('overview')
     indexes.value = quotes
     if (quotes.length && !selected.value) selected.value = quotes[0]
     if (selected.value) {
@@ -133,6 +140,129 @@ function onKlineRangeChange(range: { start: string; end: string; months: number 
     : { start: range.start, end: range.end }
   loadKline()
 }
+
+// ---- 图表 Tab：行情K线（StockChart）/ 日K均线 / 大数据K线 / 股市矩阵 / 日内走势 ----
+type ChartTab = 'quote' | 'kline' | 'bigkline' | 'matrix' | 'intraday'
+const CHART_TABS: { key: ChartTab; label: string }[] = [
+  { key: 'quote', label: '行情K线' },
+  { key: 'kline', label: '日K · 均线' },
+  { key: 'bigkline', label: '大数据K线' },
+  { key: 'matrix', label: '股市矩阵' },
+  { key: 'intraday', label: '日内走势' },
+]
+const chartTab = ref<ChartTab>('quote')
+
+const maPeriod = ref<'day' | 'week' | 'month'>('day')
+const MA_PERIOD_MAP: Record<'day' | 'week' | 'month', KlinePeriod> = {
+  day: 'daily',
+  week: 'weekly',
+  month: 'monthly',
+}
+const maPoints = ref<KLinePoint[]>([])
+const bigPoints = ref<KLinePoint[]>([])
+const trend = ref<IndexTrendData | null>(null)
+const chartLoading = ref(false)
+const trendLoading = ref(false)
+
+/** 量化接口 KlineData（date 紧凑格式）转图表点。 */
+function toKlinePoints(rows: KlineData[]): KLinePoint[] {
+  return rows.map((r, i) => ({
+    time: /^\d{8}$/.test(r.date)
+      ? `${r.date.slice(0, 4)}-${r.date.slice(4, 6)}-${r.date.slice(6, 8)}`
+      : r.date,
+    open: r.open,
+    high: r.high,
+    low: r.low,
+    close: r.close,
+    volume: r.volume,
+    changePct: i > 0 && rows[i - 1].close
+      ? Math.round((r.close / rows[i - 1].close - 1) * 10000) / 100
+      : 0,
+  }))
+}
+
+let maSeq = 0
+async function loadMaKline(big: boolean) {
+  if (!selected.value) return
+  const seq = ++maSeq
+  chartLoading.value = true
+  try {
+    const rows = await fetchIndexKline(
+      selected.value.code, '', '', MA_PERIOD_MAP[maPeriod.value], big ? 500 : 120)
+    if (seq !== maSeq) return
+    const mapped = toKlinePoints(rows)
+    if (big) bigPoints.value = mapped
+    else maPoints.value = mapped
+  } catch (e) {
+    if (seq !== maSeq) return
+    error.value = analysisErrorMessage(e)
+    if (big) bigPoints.value = []
+    else maPoints.value = []
+  } finally {
+    if (seq === maSeq) chartLoading.value = false
+  }
+}
+
+let trendSeq = 0
+async function loadTrend() {
+  if (!selected.value) return
+  const seq = ++trendSeq
+  trendLoading.value = true
+  try {
+    const data = await fetchIndexTrend(selected.value.code)
+    if (seq === trendSeq) trend.value = data
+  } catch {
+    if (seq === trendSeq) trend.value = null
+  } finally {
+    if (seq === trendSeq) trendLoading.value = false
+  }
+}
+
+function loadChartTab() {
+  if (chartTab.value === 'kline') loadMaKline(false)
+  else if (chartTab.value === 'bigkline') loadMaKline(true)
+  else if (chartTab.value === 'intraday') loadTrend()
+}
+
+function pickChartTab(t: ChartTab) {
+  if (chartTab.value === t) return
+  chartTab.value = t
+  loadChartTab()
+}
+
+function pickMaPeriod(p: 'day' | 'week' | 'month') {
+  if (maPeriod.value === p) return
+  maPeriod.value = p
+  if (chartTab.value === 'kline' || chartTab.value === 'bigkline')
+    loadMaKline(chartTab.value === 'bigkline')
+}
+
+const chartBusy = computed(() => {
+  if (chartTab.value === 'quote') return klineLoading.value
+  if (chartTab.value === 'intraday') return trendLoading.value
+  return chartLoading.value
+})
+
+const chartEmpty = computed(() => {
+  if (chartTab.value === 'quote') return !klineLoading.value && !klineData.value.length
+  if (chartTab.value === 'kline') return !chartLoading.value && !maPoints.value.length
+  if (chartTab.value === 'bigkline') return !chartLoading.value && !bigPoints.value.length
+  if (chartTab.value === 'matrix') return !indexes.value.length
+  return !trendLoading.value && !trend.value
+})
+
+// 日内走势 60 秒自动刷新，仅该 Tab 激活时运行
+let trendTimer: number | undefined
+watch(chartTab, (t) => {
+  if (trendTimer) {
+    clearInterval(trendTimer)
+    trendTimer = undefined
+  }
+  if (t === 'intraday') trendTimer = window.setInterval(loadTrend, 60_000)
+})
+onUnmounted(() => {
+  if (trendTimer) clearInterval(trendTimer)
+})
 
 async function loadMacro() {
   try { macro.value = await fetchMacroIndicators() } catch { /* 忽略 */ }
@@ -181,7 +311,10 @@ onMounted(() => {
   loadGold()
 })
 
-watch(selected, loadKline)
+watch(selected, () => {
+  loadKline()
+  loadChartTab()
+})
 watch(period, loadKline)
 watch(rateMaturity, loadUsRate)
 watch(cnRateType, loadCnRate)
@@ -271,20 +404,21 @@ const goldChart = computed(() => ({
           <div class="name">{{ idx.name }}</div>
           <div class="price" :class="pctClass(idx.changePct)">{{ Number(idx.price).toFixed(2) }}</div>
           <div class="sub" :class="pctClass(idx.changePct)">{{ signedPct(idx.changePct) }}</div>
-          <div class="sub inflow" :class="pctClass(idx.mainInflow)">{{ inflowText(idx.mainInflow) }}</div>
+          <div class="sub inflow" :class="pctClass(idx.mainInflow)"
+            :title="inflowTitle(idx.mainInflow)">{{ inflowText(idx.mainInflow) }}</div>
         </button>
       </div>
     </div>
 
     <template v-if="selected">
-      <div class="qa-card" v-loading="klineLoading">
+      <div class="qa-card">
         <div class="qa-card-head">
           <h4>
             {{ selected.name }}
             <span class="qa-muted code">{{ selected.code }}</span>
-            <span class="qa-muted range">{{ dateRange.start }} ~ {{ dateRange.end }}</span>
+            <span v-if="chartTab === 'quote'" class="qa-muted range">{{ dateRange.start }} ~ {{ dateRange.end }}</span>
           </h4>
-          <div class="qa-tools">
+          <div class="qa-tools" v-if="chartTab === 'quote'">
             <div class="qa-seg">
               <button
                 v-for="p in KLINE_PERIODS"
@@ -296,15 +430,64 @@ const goldChart = computed(() => ({
           </div>
         </div>
 
-        <StockChart
-          v-if="klineData.length"
-          :kline-data="klineData"
-          :indicators="[]"
-          :us-rate-data="usRate"
-          :us-rate-label="rateMaturity"
-          @range-change="onKlineRangeChange"
-        />
-        <div v-else-if="!klineLoading" class="qa-empty">暂无行情数据</div>
+        <div class="chart-tabs">
+          <span
+            v-for="t in CHART_TABS" :key="t.key"
+            class="chart-tab" :class="{ active: chartTab === t.key }"
+            @click="pickChartTab(t.key)"
+          >{{ t.label }}</span>
+        </div>
+
+        <div class="chart-toolbar" v-if="chartTab !== 'quote'">
+          <div class="period-tabs" v-if="chartTab === 'kline' || chartTab === 'bigkline'">
+            <span
+              v-for="p in (['day', 'week', 'month'] as const)" :key="p"
+              class="period-item" :class="{ active: maPeriod === p }"
+              @click="pickMaPeriod(p)"
+            >{{ { day: '日', week: '周', month: '月' }[p] }}</span>
+          </div>
+          <span class="chart-title">
+            {{
+              chartTab === 'kline'
+                ? 'K 线 + MA5 · MA10 · MA20 · MA30（涨红跌绿，下方为成交量，滚轮/滑块可缩放）'
+                : chartTab === 'bigkline'
+                  ? '最近 500 根 K 线（大数据量），拖动底部滑块或滚轮缩放查看历史区间'
+                  : chartTab === 'matrix'
+                    ? '色块大小 = 当日成交额，颜色 = 涨跌幅（红涨绿跌），点击色块可切换指数'
+                    : '分时走势（每 60 秒自动刷新）· 昨收不在当日波动区间时价格轴自动断轴压缩空档'
+            }}
+          </span>
+        </div>
+
+        <div v-loading="chartBusy">
+          <StockChart
+            v-if="chartTab === 'quote' && klineData.length"
+            :kline-data="klineData"
+            :indicators="[]"
+            :us-rate-data="usRate"
+            :us-rate-label="rateMaturity"
+            @range-change="onKlineRangeChange"
+          />
+          <KLineChart
+            v-if="chartTab === 'kline' && maPoints.length"
+            :key="`ma-${selected.code}-${maPeriod}`"
+            :points="maPoints" :ma-periods="[5, 10, 20, 30]" />
+          <KLineChart
+            v-if="chartTab === 'bigkline' && bigPoints.length"
+            :key="`big-${selected.code}-${maPeriod}`"
+            :points="bigPoints" :ma-periods="[5, 10, 20, 30]" />
+          <MarketMatrixChart
+            v-if="chartTab === 'matrix' && indexes.length"
+            :key="`matrix-${indexes.length}`"
+            :items="indexes" @select="selected = $event" />
+          <IntradayTrendChart
+            v-if="chartTab === 'intraday' && trend && trend.code === selected.code"
+            :key="`trend-${selected.code}-${trend.date}`"
+            :data="trend" />
+          <div v-if="chartEmpty" class="qa-empty">
+            {{ chartTab === 'intraday' ? '暂无分时数据（采集器尚未入库该指数分时）' : '暂无行情数据' }}
+          </div>
+        </div>
 
         <div v-if="macro.length" class="qa-tag-row">
           <div v-for="m in macro" :key="m.key" class="qa-macro-tag">
@@ -420,4 +603,21 @@ const goldChart = computed(() => ({
 .inflow { font-size: 11px; }
 .code { font-family: 'SFMono-Regular', Consolas, monospace; margin-left: 4px; }
 .range { margin-left: 12px; font-weight: normal; }
+
+/* 图表 Tab（下划线风格，与指数页一致） */
+.chart-tabs { display: flex; gap: 4px; border-bottom: 1px solid #ebeef5; margin: 4px 0 12px; }
+.chart-tab {
+  padding: 5px 12px; cursor: pointer; font-size: 13px; color: #606266;
+  border-bottom: 2px solid transparent; margin-bottom: -1px; user-select: none;
+  white-space: nowrap;
+}
+.chart-tab:hover { color: #409eff; }
+.chart-tab.active { color: #409eff; border-bottom-color: #409eff; font-weight: 600; }
+
+.chart-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+.chart-title { color: #606266; font-size: 12px; }
+.period-tabs { display: flex; border: 1px solid #dcdfe6; border-radius: 6px; overflow: hidden; }
+.period-item { padding: 3px 14px; cursor: pointer; font-size: 12px; color: #606266; background: #fff; user-select: none; }
+.period-item + .period-item { border-left: 1px solid #dcdfe6; }
+.period-item.active { background: #409eff; color: #fff; }
 </style>
