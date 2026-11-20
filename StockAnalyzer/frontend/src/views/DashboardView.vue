@@ -111,7 +111,7 @@ onMounted(load)
     </div>
 
     <!-- 两市成交量（点击进入详情） -->
-    <div class="page-card clickable-card" v-if="volume && volume.points.length" @click="router.push('/volume')">
+    <div class="page-card clickable-card volume-card" v-if="volume && volume.points.length" @click="router.push('/volume')">
       <div class="card-head">
         <h4>今日两市成交 <span class="vol-amount" :class="pctClass(volume.changePct)">{{ (volume.todayAmount / 10000).toFixed(2) }} 万亿</span></h4>
         <span class="vol-change">
@@ -129,7 +129,7 @@ onMounted(load)
     </div>
 
     <!-- 北向 / 南向资金 -->
-    <div class="page-card" v-if="hsgt && hsgt.points.length">
+    <div class="page-card hsgt-card" v-if="hsgt && hsgt.points.length">
       <div class="card-head hsgt-head">
         <div class="hsgt-item">
           <span class="hsgt-label">北向（沪深股通）今日成交</span>
@@ -149,7 +149,7 @@ onMounted(load)
     </div>
 
     <!-- 利率与汇率（合并折线图，双轴） -->
-    <div class="page-card" v-if="mergedRates">
+    <div class="page-card rates-card" v-if="mergedRates">
       <div class="card-head rate-merged-head">
         <h4>利率与汇率</h4>
         <div class="rate-stats" v-if="fx && us10y && cnBond">
@@ -277,6 +277,13 @@ onMounted(load)
 .clickable:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); }
 .clickable-card { cursor: pointer; transition: all 0.15s; }
 .clickable-card:hover { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); }
+.volume-card { width: 50%; }
+@media (max-width: 1000px) { .volume-card { width: 100%; } }
+.hsgt-card { width: 50%; }
+@media (max-width: 1000px) { .hsgt-card { width: 100%; } }
+.hsgt-card .hsgt-head { flex-wrap: wrap; gap: 12px 48px; }
+.rates-card { width: 50%; }
+@media (max-width: 1000px) { .rates-card { width: 100%; } }
 .more-hint { text-align: right; color: #409eff; font-size: 12px; margin-top: 6px; }
 .idx-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 4px; gap: 4px; }
 .idx-head .label { font-size: 13px; white-space: nowrap; display: flex; align-items: center; gap: 4px; }

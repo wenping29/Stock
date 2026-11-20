@@ -42,10 +42,18 @@ echo "2. 正在重启 .NET 项目..."
 # 找进程 -> 杀掉 -> 切换到 www 用户启动
 ssh -i "$SSH_KEY" -p "$PORT" "$SERVER" bash -s << EOF
     echo "正在查找并停止旧进程..."
-    # 查找包含 SpServer 的 dotnet 进程并杀掉
-    pkill -u www -f "$EXECUTABLE_NAME" || true
-    sleep 2
-  
+    # 不能限定 -u www：服务可能以 root 启动（如 dotnet FundAnalysis.dll）
+    pkill -f "$EXECUTABLE_NAME.dll" || true
+    pkill -f "/$EXECUTABLE_NAME" || true
+    for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+      ss -lnt | grep -q ':5000 ' || break
+      sleep 1
+    done
+    if ss -lnt | grep -q ':5000 '; then
+      echo "端口 5000 仍被占用：旧进程未停止，已中止部署（避免覆盖运行中程序的 DLL）" >&2
+      exit 1
+    fi
+
     echo "完成关闭旧进程"
 EOF
 echo "========== 开始上传 .NET 项目 =========="
@@ -56,6 +64,7 @@ if [[ "$IS_FULL_DEPLOY" == "y" || "$IS_FULL_DEPLOY" == "Y" ]]; then
   scp -i "$SSH_KEY" -P "$PORT" -r "$LOCAL_DOTNET"* "$SERVER:$REMOTE_DOTNET/"
 else
   echo ">>> 模式：增量上传（仅上传指定文件）..."
+  echo "⚠️  自包含部署下，SDK/运行时或第三方包升级后必须选全量上传，否则运行时会因 DLL 版本不一致报 BadImageFormatException（Bad IL format）"
   # 只上传核心代码文件
   scp -i "$SSH_KEY" -P "$PORT" \
     "$LOCAL_DOTNET$EXECUTABLE_NAME.dll" \
@@ -75,7 +84,9 @@ echo ".NET 项目上传完成"
 echo "========== 开始重启 .NET 项目 =========="
 ssh -i "$SSH_KEY" -p "$PORT" "$SERVER" bash -s << EOF
     echo "正在停止旧进程..."
-    pkill -u www -f "$EXECUTABLE_NAME" || true
+    # 与上面的停止逻辑保持一致，不限定用户
+    pkill -f "$EXECUTABLE_NAME.dll" || true
+    pkill -f "/$EXECUTABLE_NAME" || true
     sleep 2
 
     echo "正在修复权限..."
