@@ -312,7 +312,9 @@ public class CollectorService(AppDbContext db, IQuoteProvider provider, IConfigu
     }
 
     /// <summary>
-    /// 同步宏观 / 外汇日度序列（离岸人民币 USDCNH、在岸中间价 USDCNYC、十年美债 US10Y、国债 CN5Y/CN10Y/CN30Y）入库。
+    /// 同步宏观 / 外汇日度序列（离岸人民币 USDCNH、在岸中间价 USDCNYC、美债 US3M/US6M/US10Y、国债 CN5Y/CN10Y/CN30Y）入库；
+    /// 同时把汇率（fx_cny_usd）、中债（cn10y）、黄金（COMEX）、原油（NYMEX）日线追加到 MarketSeriesPoints，
+    /// 供大盘页多周期曲线与宏观速览使用（多周期在查询时聚合）。
     /// 全部走 push2his/push2，上游不可达时单序列失败仅记录告警，不影响其余序列与后续任务。
     /// </summary>
     [DisableConcurrentExecution(timeoutInSeconds: 300)]
@@ -321,17 +323,21 @@ public class CollectorService(AppDbContext db, IQuoteProvider provider, IConfigu
         var series = new (string Symbol, int SecMarket, int Klt, int Limit, int Fqt)[]
         {
             ("USDCNH", 133, 101, 365, 1),
+            ("US3M", 171, 101, 365, 0),
+            ("US6M", 171, 101, 365, 0),
             ("US10Y", 171, 101, 365, 0),
             ("CN5Y", 171, 101, 365, 0),
             ("CN10Y", 171, 101, 365, 0),
             ("CN30Y", 171, 101, 365, 0),
         };
 
+        var barsBySymbol = new Dictionary<string, List<KLineItem>>();
         foreach (var s in series)
         {
             try
             {
                 var bars = await provider.FetchKLineAsync(s.Symbol, s.SecMarket, s.Klt, s.Limit, s.Fqt);
+                barsBySymbol[s.Symbol] = bars;
                 await UpsertIndicatorSeriesAsync(s.Symbol,
                     bars.Select(b => (b.Time.Date, b.Close, (double?)null)));
                 logger.LogInformation("宏观序列 {Symbol} 入库 {Count} 条", s.Symbol, bars.Count);
@@ -339,6 +345,30 @@ public class CollectorService(AppDbContext db, IQuoteProvider provider, IConfigu
             catch (Exception ex)
             {
                 logger.LogWarning(ex, "宏观序列 {Symbol} 同步失败（上游不可达？）", s.Symbol);
+            }
+        }
+
+        // 汇率 / 中债曲线：复用上面已拉取的日线，写入通用序列表
+        await UpsertMarketSeriesAsync("fx_cny_usd", barsBySymbol.GetValueOrDefault("USDCNH"));
+        await UpsertMarketSeriesAsync("cn10y", barsBySymbol.GetValueOrDefault("CN10Y"));
+
+        // 全球商品日线（东财全球期货主连）：gold_price = COMEX 黄金，crude_oil = NYMEX 原油
+        var commodities = new (string Key, string Symbol, int SecMarket)[]
+        {
+            ("gold_price", "GC00Y", 101),
+            ("crude_oil", "CL00Y", 102),
+        };
+        foreach (var c in commodities)
+        {
+            try
+            {
+                var bars = await provider.FetchKLineAsync(c.Symbol, c.SecMarket, 101, 4000, fqt: 0);
+                await UpsertMarketSeriesAsync(c.Key, bars);
+                logger.LogInformation("商品序列 {Key}（{Symbol}）同步完成，{Count} 条", c.Key, c.Symbol, bars.Count);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "商品序列 {Key}（{Symbol}）同步失败（上游不可达？）", c.Key, c.Symbol);
             }
         }
 
@@ -414,6 +444,36 @@ public class CollectorService(AppDbContext db, IQuoteProvider provider, IConfigu
         await SyncWatchlistDailyAsync();
         await SyncWatchlistMinutesAsync();
         await SyncSectorMoneyFlowAsync();
+    }
+
+    /// <summary>行情序列日线追加（仅新增缺失日期，历史导入数据保持原值）。</summary>
+    private async Task UpsertMarketSeriesAsync(string key, IReadOnlyList<KLineItem>? bars)
+    {
+        if (bars is null || bars.Count == 0) return;
+
+        var existing = (await db.MarketSeriesPoints
+            .Where(x => x.Key == key && x.Period == "daily")
+            .Select(x => x.Date)
+            .ToListAsync()).ToHashSet();
+
+        var added = 0;
+        foreach (var b in bars)
+        {
+            if (!existing.Add(b.Time.Date)) continue;
+            db.MarketSeriesPoints.Add(new MarketSeriesPoint
+            {
+                Key = key,
+                Period = "daily",
+                Date = b.Time.Date,
+                Open = b.Open,
+                High = b.High,
+                Low = b.Low,
+                Close = b.Close,
+            });
+            added++;
+        }
+        if (added > 0) await db.SaveChangesAsync();
+        logger.LogInformation("行情序列 {Key} 日线新增 {Count} 条", key, added);
     }
 
     private async Task UpsertIndicatorSeriesAsync(string symbol, IEnumerable<(DateTime Date, double Value, double? ChangePct)> rows)

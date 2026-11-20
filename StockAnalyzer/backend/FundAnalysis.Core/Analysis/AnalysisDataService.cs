@@ -341,14 +341,25 @@ public partial class AnalysisDataService(AppDbContext db, IQuoteProvider quotes,
         return (code, market);
     }
 
-    /// <summary>通用行情序列（汇率/黄金/原油/中债）。</summary>
+    /// <summary>通用行情序列（汇率/黄金/原油/中债）。库里只存日线，其余周期按日线即时聚合。</summary>
     public async Task<List<AnalysisKline>> GetMarketSeriesAsync(string key, string period, DateTime? start, DateTime? end, CancellationToken ct = default)
     {
         var p = NormalizePeriod(period);
-        var query = db.MarketSeriesPoints.AsNoTracking().Where(x => x.Key == key && x.Period == p);
-        if (start is not null) query = query.Where(x => x.Date >= start);
-        if (end is not null) query = query.Where(x => x.Date <= end);
-        var rows = await query.OrderBy(x => x.Date).ToListAsync(ct);
-        return ToKlines(rows.Select(x => (x.Date, x.Open, x.High, x.Low, x.Close, 0.0, 0.0)));
+        if (p == "daily")
+        {
+            var query = db.MarketSeriesPoints.AsNoTracking().Where(x => x.Key == key && x.Period == "daily");
+            if (start is not null) query = query.Where(x => x.Date >= start);
+            if (end is not null) query = query.Where(x => x.Date <= end);
+            var rows = await query.OrderBy(x => x.Date).ToListAsync(ct);
+            return ToKlines(rows.Select(x => (x.Date, x.Open, x.High, x.Low, x.Close, 0.0, 0.0)));
+        }
+
+        // 周/月/季/年：采集器只追加日线，聚合在查询时完成，避免历史聚合行随迁移停更
+        var daily = await db.MarketSeriesPoints.AsNoTracking()
+            .Where(x => x.Key == key && x.Period == "daily")
+            .OrderBy(x => x.Date)
+            .ToListAsync(ct);
+        var klines = ToKlines(daily.Select(x => (x.Date, x.Open, x.High, x.Low, x.Close, 0.0, 0.0)));
+        return Aggregate(klines, p, start ?? DateTime.MinValue, end ?? DateTime.MaxValue);
     }
 }
