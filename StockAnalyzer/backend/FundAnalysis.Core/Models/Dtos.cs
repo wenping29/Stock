@@ -81,6 +81,12 @@ public record MarketVolumeDto(
     double? ChangePct,
     List<MarketVolumePointDto> Points);
 
+/// <summary>今日两市成交额分时累计点。Time 为 HH:mm，Amount 为累计成交额（亿元）。</summary>
+public record MarketVolumeCurvePointDto(string Time, double Amount);
+
+/// <summary>今日两市成交额分时曲线（沪 000001 + 深 399106 分钟成交额累加）。</summary>
+public record MarketVolumeTodayDto(string Date, List<MarketVolumeCurvePointDto> Points);
+
 /// <summary>行业板块主力资金流（金额单位：亿元）。</summary>
 public record SectorFlowItemDto(string Code, string Name, double MainNet, double Amount, double ChangePct);
 
@@ -148,10 +154,12 @@ public record ScreenerResponse(int Total, int Page, int PageSize, List<ScreenerI
 
 // ---------- 个股浏览 ----------
 
+/// <summary>个股列表项。IndexWeightPct 为上证指数权重占比（%），非沪市股票为 null。</summary>
 public record StockListItemDto(
     string Symbol, string Name, string? Industry, string Board,
     double ClosePrice, double? ChangePct, double? PeTtm, double? PbMrq,
-    double? MarketCap, double? Roe, double? RevenueYoY, double? NetProfitYoY);
+    double? MarketCap, double? Roe, double? RevenueYoY, double? NetProfitYoY,
+    double? IndexWeightPct);
 
 public record StockListResponse(int Total, int Page, int PageSize, List<StockListItemDto> Items);
 

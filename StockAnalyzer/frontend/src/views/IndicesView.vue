@@ -156,9 +156,9 @@ onMounted(load)
 <template>
   <div v-loading="loading">
     <!-- 数据尚未采集完成的空状态 -->
-    <div class="page-card" v-if="!loading && !items.length">
+    <div class="page-card" v-if="!items.length">
       <el-empty description="指数数据尚未采集完成（首次启动或东财接口限流时约需几分钟到一小时），稍后点击刷新；也可在管理后台手动触发“同步指数”">
-        <el-button @click="load">刷新</el-button>
+        <el-button :loading="loading" @click="load">刷新</el-button>
       </el-empty>
     </div>
 

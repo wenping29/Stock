@@ -162,7 +162,7 @@ public class EastmoneyProvider(IHttpClientFactory factory) : IQuoteProvider
     /// </summary>
     public async Task<List<TrendPoint>> FetchTrendAsync(string symbol, int secMarket, CancellationToken ct = default)
     {
-        var url = $"https://push2.eastmoney.com/api/qt/stock/trends2/get?secid={secMarket}.{symbol}&fields1=f1,f2,f3,f4,f5,f6,f7,f8&fields2=f51,f53,f56&iscr=0&ndays=1";
+        var url = $"https://push2.eastmoney.com/api/qt/stock/trends2/get?secid={secMarket}.{symbol}&fields1=f1,f2,f3,f4,f5,f6,f7,f8&fields2=f51,f53,f56,f57&iscr=0&ndays=1";
         using var client = NewClient();
         using var doc = JsonDocument.Parse(await GetWithRetryAsync(client, url, ct));
         var list = new List<TrendPoint>();
@@ -174,13 +174,14 @@ public class EastmoneyProvider(IHttpClientFactory factory) : IQuoteProvider
         double sum = 0;
         foreach (var el in trends.EnumerateArray())
         {
-            // 时间,价格,成交量（分钟量）
+            // 时间,价格,成交量（分钟量）,成交额（分钟额，元）
             var parts = el.GetString()?.Split(',') ?? [];
             if (parts.Length < 3) continue;
             if (!DateTime.TryParse(parts[0], Cn, DateTimeStyles.None, out var time)) continue;
             var price = Num(parts[1]);
             sum += price;
-            list.Add(new TrendPoint(time, price, Num(parts[2]), sum / (list.Count + 1)));
+            var amount = parts.Length > 3 ? Num(parts[3]) : 0;
+            list.Add(new TrendPoint(time, price, Num(parts[2]), sum / (list.Count + 1), amount));
         }
         return list;
     }

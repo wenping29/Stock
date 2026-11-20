@@ -59,8 +59,8 @@ onMounted(load)
         <template #default="{ row }">
           <el-select :model-value="row.role" size="small" @change="(r: string) => changeRole(row, r)">
             <el-option value="Admin" label="Admin（管理员）" />
-            <el-option value="VIP" label="VIP（小时线+资金流）" />
-            <el-option value="User" label="User（日线）" />
+            <el-option value="VIP" label="VIP" />
+            <el-option value="User" label="User（普通用户）" />
           </el-select>
         </template>
       </el-table-column>

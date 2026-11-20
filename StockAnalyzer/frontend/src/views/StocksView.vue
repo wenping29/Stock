@@ -6,6 +6,7 @@ import type { StockListItem, BoardStat, WatchlistItem } from '../types'
 import { fetchStocks, fetchBoardStats } from '../api/stocks'
 import { fetchIndustries } from '../api/screener'
 import { addToWatchlist, fetchWatchlist } from '../api/quote'
+import { triggerCollectSymbol, getCollectStatus } from '../api/collect'
 
 const router = useRouter()
 
@@ -36,6 +37,43 @@ async function addSelf(row: StockListItem) {
   ElMessage.success(res.message)
   watchSymbols.value.add(row.symbol)
   watchSymbols.value = new Set(watchSymbols.value)
+}
+
+// 按需采集：详情页数据缺失时，立即拉取该标的日线/资金流/分钟线
+const collecting = ref<Set<string>>(new Set())
+
+async function refreshStock(row: StockListItem) {
+  if (collecting.value.has(row.symbol)) return
+  collecting.value.add(row.symbol)
+  collecting.value = new Set(collecting.value)
+  try {
+    const job = await triggerCollectSymbol(row.symbol)
+    const started = Date.now()
+    while (Date.now() - started < 90000) {
+      await new Promise((r) => setTimeout(r, 2000))
+      let state = ''
+      try {
+        state = (await getCollectStatus(job.jobId)).state
+      } catch {
+        continue // 状态查询偶发失败，继续轮询
+      }
+      if (state === 'Succeeded') {
+        ElMessage.success(`${row.name} 数据已更新`)
+        await load()
+        return
+      }
+      if (state === 'Failed') {
+        ElMessage.error('采集失败，请稍后重试（详见 /hangfire 面板）')
+        return
+      }
+    }
+    ElMessage.warning('采集超时，任务仍在后台执行，请稍后进入详情查看')
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message ?? '触发采集失败')
+  } finally {
+    collecting.value.delete(row.symbol)
+    collecting.value = new Set(collecting.value)
+  }
 }
 
 // 已在自选的行加背景色
@@ -109,6 +147,10 @@ function fmt(v: number | null | undefined, digits = 2) {
 function fmtPct2(v: number | null | undefined) {
   return v == null ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`
 }
+/** 上证指数权重：大于 0.1% 显示两位小数，小权重保留三位便于区分 */
+function fmtWeight(v: number | null | undefined) {
+  return v == null ? '—' : `${v >= 0.1 ? v.toFixed(2) : v.toFixed(3)}%`
+}
 
 onMounted(async () => {
   load()
@@ -166,6 +208,13 @@ onMounted(async () => {
                 @click.stop="router.push(`/analysis/${row.symbol}`)">详情</el-button>
             </template>
           </el-table-column>
+          <el-table-column label="刷新" width="80" align="center">
+            <template #default="{ row }">
+              <el-button link size="small" type="primary"
+                :loading="collecting.has(row.symbol)"
+                @click.stop="refreshStock(row)">刷新</el-button>
+            </template>
+          </el-table-column>
           <el-table-column label="代码" width="90">
             <template #default="{ row }"><span class="symbol-text">{{ row.symbol }}</span></template>
           </el-table-column>
@@ -178,6 +227,14 @@ onMounted(async () => {
           <el-table-column label="行业" min-width="90">
             <template #default="{ row }">
               <span class="dim">{{ row.industry ?? '—' }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="上证权重" width="100" align="right">
+            <template #default="{ row }">
+              <el-tag v-if="row.indexWeightPct != null" size="small" type="warning" effect="plain">
+                {{ fmtWeight(row.indexWeightPct) }}
+              </el-tag>
+              <span v-else class="dim">—</span>
             </template>
           </el-table-column>
           <el-table-column width="100" align="right">

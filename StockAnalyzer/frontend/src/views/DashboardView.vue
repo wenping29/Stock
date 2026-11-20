@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import type { MarketIndex, MarketVolume, HsgtFlow, FxRate, Us10y, CnBond, WatchlistItem, LiquidityOverview, SectorFlow } from '../types'
-import { fetchMarketOverview, fetchMarketVolume, fetchHsgtFlow, fetchFxRate, fetchUs10y, fetchCnBond, fetchWatchlist, fetchSectorFlow } from '../api/quote'
+import { ElMessage } from 'element-plus'
+import type { MarketIndex, MarketVolume, MarketVolumeToday, HsgtFlow, FxRate, Us10y, CnBond, WatchlistItem, LiquidityOverview, SectorFlow } from '../types'
+import { fetchMarketOverview, fetchMarketVolume, fetchMarketVolumeToday, fetchHsgtFlow, fetchFxRate, fetchUs10y, fetchCnBond, fetchWatchlist, fetchSectorFlow } from '../api/quote'
 import { fetchLiquidityOverview } from '../api/liquidity'
 import SparkLine from '../components/SparkLine.vue'
 import VolumeBarChart from '../components/VolumeBarChart.vue'
+import VolumeCurveChart from '../components/VolumeCurveChart.vue'
 import HsgtChart from '../components/HsgtChart.vue'
 import MultiLineChart from '../components/MultiLineChart.vue'
 import SectorFlowChart from '../components/SectorFlowChart.vue'
@@ -14,6 +16,8 @@ const router = useRouter()
 
 const indices = ref<MarketIndex[]>([])
 const volume = ref<MarketVolume | null>(null)
+const volumeToday = ref<MarketVolumeToday | null>(null)
+const volumeTab = ref<'curve' | 'bar'>('curve')
 const hsgt = ref<HsgtFlow | null>(null)
 const fx = ref<FxRate | null>(null)
 const us10y = ref<Us10y | null>(null)
@@ -69,9 +73,10 @@ function fmtPct(v: number | null | undefined) {
 async function load() {
   loading.value = true
   try {
-    const [idx, vol, hf, fxr, u10, cnb, wl, liq, sf] = await Promise.all([
+    const [idx, vol, vtoday, hf, fxr, u10, cnb, wl, liq, sf] = await Promise.all([
       fetchMarketOverview(),
       fetchMarketVolume(30).catch(() => null),
+      fetchMarketVolumeToday().catch(() => null),
       fetchHsgtFlow(30).catch(() => null),
       fetchFxRate(90).catch(() => null),
       fetchUs10y(90).catch(() => null),
@@ -82,6 +87,7 @@ async function load() {
     ])
     indices.value = idx
     volume.value = vol
+    volumeToday.value = vtoday
     hsgt.value = hf
     fx.value = fxr
     us10y.value = u10
@@ -95,6 +101,51 @@ async function load() {
 }
 
 onMounted(load)
+
+// 模块级刷新：同一个模块刷新中按钮置灰并忽略重复点击，完成后恢复
+const refreshing = ref<Set<string>>(new Set())
+
+function busy(key: string) {
+  return refreshing.value.has(key)
+}
+
+async function refresh(key: string, action: () => Promise<void>) {
+  if (refreshing.value.has(key)) return
+  refreshing.value.add(key)
+  refreshing.value = new Set(refreshing.value)
+  try {
+    await action()
+  } catch {
+    ElMessage.error('刷新失败，请稍后重试')
+  } finally {
+    refreshing.value.delete(key)
+    refreshing.value = new Set(refreshing.value)
+  }
+}
+
+// 成交量刷新的只是"当日成交额曲线"，日线柱状数据随首页整体加载
+const reloadVolumeCurve = () => refresh('volume', async () => {
+  volumeToday.value = await fetchMarketVolumeToday()
+})
+const reloadHsgt = () => refresh('hsgt', async () => {
+  hsgt.value = await fetchHsgtFlow(30)
+})
+const reloadRates = () => refresh('rates', async () => {
+  const [fxr, u10, cnb] = await Promise.all([fetchFxRate(90), fetchUs10y(90), fetchCnBond(90)])
+  fx.value = fxr
+  us10y.value = u10
+  cnBond.value = cnb
+})
+// 自选、涨跌榜同源，共用 watch 锁
+const reloadWatch = () => refresh('watch', async () => {
+  watchlist.value = await fetchWatchlist()
+})
+const reloadLiquidity = () => refresh('liquidity', async () => {
+  liquidity.value = await fetchLiquidityOverview()
+})
+const reloadSector = () => refresh('sector', async () => {
+  sectorFlow.value = await fetchSectorFlow()
+})
 </script>
 
 <template>
@@ -121,17 +172,30 @@ onMounted(load)
         <div class="page-card clickable-card volume-card" v-if="volume && volume.points.length" @click="router.push('/volume')">
           <div class="card-head">
             <h4>今日两市成交 <span class="vol-amount" :class="pctClass(volume.changePct)">{{ (volume.todayAmount / 10000).toFixed(2) }} 万亿</span></h4>
-            <span class="vol-change">
-              <template v-if="volume.changePct != null">
-                较昨日
-                <b :class="pctClass(volume.changePct)">
-                  {{ (volume.changePct ?? 0) >= 0 ? '放量' : '缩量' }} {{ Math.abs(volume.changePct ?? 0).toFixed(1) }}%
-                </b>
-                （昨日 {{ (volume.yesterdayAmount / 10000).toFixed(2) }} 万亿）
-              </template>
-            </span>
+            <div class="head-right">
+              <span class="vol-change">
+                <template v-if="volume.changePct != null">
+                  较昨日
+                  <b :class="pctClass(volume.changePct)">
+                    {{ (volume.changePct ?? 0) >= 0 ? '放量' : '缩量' }} {{ Math.abs(volume.changePct ?? 0).toFixed(1) }}%
+                  </b>
+                  （昨日 {{ (volume.yesterdayAmount / 10000).toFixed(2) }} 万亿）
+                </template>
+              </span>
+              <el-button link size="small" type="primary" :loading="busy('volume')"
+                @click.stop="reloadVolumeCurve">刷新</el-button>
+            </div>
           </div>
-          <VolumeBarChart :points="volume.points" />
+          <div class="volume-tabs" @click.stop>
+            <span class="vol-tab" :class="{ active: volumeTab === 'curve' }" @click="volumeTab = 'curve'">今日成交额曲线</span>
+            <span class="vol-tab" :class="{ active: volumeTab === 'bar' }" @click="volumeTab = 'bar'">日成交量柱状图</span>
+            <span class="vol-change" v-if="volumeToday && volumeToday.date">当日 {{ volumeToday.date }}</span>
+          </div>
+          <template v-if="volumeTab === 'curve'">
+            <VolumeCurveChart v-if="volumeToday && volumeToday.points.length" :points="volumeToday.points" />
+            <el-empty v-else description="今日分时成交额尚未采集（采集器每 2 分钟入库），可稍后点击刷新" :image-size="60" />
+          </template>
+          <VolumeBarChart v-else :points="volume.points" />
           <div class="more-hint">点击查看 日 / 周 / 月 / 季度 / 年 完整成交量分析 →</div>
         </div>
 
@@ -151,6 +215,8 @@ onMounted(load)
               <span class="vol-amount" :class="pctClass(hsgt.southTodayNetInflow)">{{ Math.abs(hsgt.southTodayNetInflow).toFixed(1) }} 亿</span>
               <span class="vol-change">昨日 {{ hsgt.southYesterdayNetInflow >= 0 ? '净流入 ' : '净流出 ' }}{{ Math.abs(hsgt.southYesterdayNetInflow).toFixed(1) }} 亿</span>
             </div>
+            <el-button link size="small" type="primary" style="margin-left: auto" :loading="busy('hsgt')"
+              @click="reloadHsgt">刷新</el-button>
           </div>
           <HsgtChart :points="hsgt.points" />
         </div>
@@ -176,6 +242,8 @@ onMounted(load)
                 中美利差 <b :class="(cnBond.latest10y - us10y.latest) >= 0 ? 'up' : 'down'">{{ ((cnBond.latest10y - us10y.latest) * 100).toFixed(0) }}bp</b>
               </span>
             </div>
+            <el-button link size="small" type="primary" style="margin-left: auto" :loading="busy('rates')"
+              @click="reloadRates">刷新</el-button>
           </div>
           <MultiLineChart
             :times="mergedRates.times"
@@ -194,7 +262,10 @@ onMounted(load)
         <div class="page-card">
           <div class="card-head">
             <h4>我的自选</h4>
-            <el-button link type="primary" @click="router.push('/watchlist')">进入自选分析 →</el-button>
+            <div class="head-right">
+              <el-button link type="primary" :loading="busy('watch')" @click="reloadWatch">刷新</el-button>
+              <el-button link type="primary" @click="router.push('/watchlist')">进入自选分析 →</el-button>
+            </div>
           </div>
           <div class="mini-grid">
             <div class="mini-item">
@@ -225,7 +296,10 @@ onMounted(load)
         <div class="page-card">
           <div class="card-head">
             <h4>央行流动性速览</h4>
-            <el-button link type="primary" @click="router.push('/liquidity')">流动性分析 →</el-button>
+            <div class="head-right">
+              <el-button link type="primary" :loading="busy('liquidity')" @click="reloadLiquidity">刷新</el-button>
+              <el-button link type="primary" @click="router.push('/liquidity')">流动性分析 →</el-button>
+            </div>
           </div>
           <div class="mini-grid" v-if="liquidity">
             <div class="mini-item">
@@ -258,7 +332,11 @@ onMounted(load)
               行业板块资金流向
               <span class="vol-change">主力净流入 · 面积越大资金规模越大</span>
             </h4>
-            <span class="vol-change" v-if="sectorFlow.date">数据日期 {{ sectorFlow.date }}</span>
+            <span class="head-right">
+              <span class="vol-change" v-if="sectorFlow.date">数据日期 {{ sectorFlow.date }}</span>
+              <el-button link size="small" type="primary" :loading="busy('sector')"
+                @click="reloadSector">刷新</el-button>
+            </span>
           </div>
           <SectorFlowChart :items="sectorFlow.items" />
           <div class="hsgt-note">红色=主力净流入，绿色=净流出，颜色越深规模越大；单位为亿元</div>
@@ -269,7 +347,10 @@ onMounted(load)
     <!-- 今日涨跌榜 -->
     <div class="two-col" v-if="watchlist.length">
       <div class="page-card">
-        <div class="card-head"><h4>今日涨幅榜</h4></div>
+        <div class="card-head">
+          <h4>今日涨幅榜</h4>
+          <el-button link size="small" type="primary" :loading="busy('watch')" @click="reloadWatch">刷新</el-button>
+        </div>
         <div class="rank-list">
           <div v-for="w in topGainers" :key="w.symbol" class="rank-item" @click="router.push(`/analysis/${w.symbol}`)">
             <span class="rank-name">{{ w.name }}</span>
@@ -279,7 +360,10 @@ onMounted(load)
         </div>
       </div>
       <div class="page-card">
-        <div class="card-head"><h4>今日跌幅榜</h4></div>
+        <div class="card-head">
+          <h4>今日跌幅榜</h4>
+          <el-button link size="small" type="primary" :loading="busy('watch')" @click="reloadWatch">刷新</el-button>
+        </div>
         <div class="rank-list">
           <div v-for="w in topLosers" :key="w.symbol" class="rank-item" @click="router.push(`/analysis/${w.symbol}`)">
             <span class="rank-name">{{ w.name }}</span>
@@ -317,6 +401,13 @@ onMounted(load)
 .spread b { font-size: 16px; }
 @media (max-width: 1000px) { .two-col { grid-template-columns: 1fr; } }
 .card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.head-right { display: flex; align-items: center; gap: 12px; }
+.volume-tabs { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.vol-tab {
+  padding: 2px 10px; border: 1px solid #dcdfe6; border-radius: 12px;
+  font-size: 12px; color: #606266; cursor: pointer; transition: all 0.15s;
+}
+.vol-tab.active { background: #409eff; border-color: #409eff; color: #fff; }
 .card-head h4 { font-size: 15px; }
 .vol-amount { font-size: 20px; margin-left: 6px; }
 .vol-change { font-size: 13px; color: #909399; }

@@ -97,7 +97,7 @@ onMounted(load)
       <div v-loading="loading">
         <VolumeBarChart v-if="data && data.points.length" :points="data.points" :labels="labels" />
         <el-empty v-else-if="!loading" description="成交量数据尚未采集完成，请稍后刷新" :image-size="60">
-          <el-button @click="load">刷新</el-button>
+          <el-button :loading="loading" @click="load">刷新</el-button>
         </el-empty>
       </div>
     </div>

@@ -275,6 +275,9 @@ namespace FundAnalysis.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
+                    b.Property<double>("Amount")
+                        .HasColumnType("double precision");
+
                     b.Property<double>("Avg")
                         .HasColumnType("double precision");
 

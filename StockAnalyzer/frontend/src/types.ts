@@ -137,6 +137,17 @@ export interface MarketVolume {
   points: MarketVolumePoint[]
 }
 
+/** 今日两市成交额分时累计点：time=HH:mm，amount=累计成交额（亿元） */
+export interface MarketVolumeCurvePoint {
+  time: string
+  amount: number
+}
+
+export interface MarketVolumeToday {
+  date: string
+  points: MarketVolumeCurvePoint[]
+}
+
 export interface HsgtPoint {
   date: string
   northAmount: number
@@ -274,6 +285,8 @@ export interface StockListItem {
   roe: number | null
   revenueYoY: number | null
   netProfitYoY: number | null
+  /** 上证指数权重占比（%），非沪市股票为 null。 */
+  indexWeightPct: number | null
 }
 
 export interface StockListResponse {

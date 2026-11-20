@@ -5,21 +5,19 @@ import { ElMessage } from 'element-plus'
 import type { KLinePoint, PerformanceData, MoneyFlowData, FundEstimate } from '../types'
 import { fetchKLine, fetchPerformance, fetchMoneyFlow } from '../api/quote'
 import { fetchFundEstimates } from '../api/funds'
-import { useAuthStore } from '../stores/auth'
+import { triggerCollectSymbol, getCollectStatus } from '../api/collect'
 import KLineChart from '../components/KLineChart.vue'
 import TrendChart from '../components/TrendChart.vue'
 import MoneyFlowChart from '../components/MoneyFlowChart.vue'
 
 const props = defineProps<{ symbol: string }>()
 const router = useRouter()
-const auth = useAuthStore()
 
 const perf = ref<PerformanceData | null>(null)
 const points = ref<KLinePoint[]>([])
 const flow = ref<MoneyFlowData | null>(null)
 const loading = ref(false)
 const flowDays = ref(20)
-const flowDenied = ref(false)
 // 场外基金当日重仓股估算
 const estimate = ref<FundEstimate | null>(null)
 let estimateTimer: ReturnType<typeof setInterval> | undefined
@@ -31,10 +29,10 @@ const typeLabel = computed(() =>
   ({ Stock: '股票', Etf: 'ETF', Fund: '场外基金' })[perf.value?.type ?? ''] ?? '')
 
 const periods = computed(() => {
-  const list: { key: 'hour' | 'day' | 'week' | 'month'; label: string; locked?: boolean }[] = []
+  const list: { key: 'hour' | 'day' | 'week' | 'month'; label: string }[] = []
   if (!isFund.value) {
-    // 场外基金没有小时数据；小时线需要 VIP
-    list.push({ key: 'hour', label: '小时', locked: !auth.isVip })
+    // 场外基金没有小时数据
+    list.push({ key: 'hour', label: '小时' })
   }
   list.push({ key: 'day', label: '日' }, { key: 'week', label: '周' }, { key: 'month', label: '月' })
   return list
@@ -49,24 +47,18 @@ async function loadKLine() {
   try {
     const res = await fetchKLine(props.symbol, period.value, 120)
     points.value = res.points
-  } catch (e: any) {
-    if (e?.response?.status === 403) {
-      ElMessage.warning('小时线为 VIP 功能，请联系管理员升级角色')
-      period.value = 'day'
-    }
   } finally {
     loading.value = false
   }
 }
 
 async function loadFlow() {
-  flowDenied.value = false
   flow.value = null
   if (isFund.value) return
   try {
     flow.value = await fetchMoneyFlow(props.symbol, flowDays.value)
-  } catch (e: any) {
-    if (e?.response?.status === 403) flowDenied.value = true
+  } catch {
+    flow.value = null
   }
 }
 
@@ -86,10 +78,6 @@ function reportDateText(d: string | null) {
 }
 
 function pickPeriod(p: 'hour' | 'day' | 'week' | 'month') {
-  if (p === 'hour' && !auth.isVip) {
-    ElMessage.warning('小时线为 VIP 功能，请联系管理员升级角色')
-    return
-  }
   period.value = p
   loadKLine()
 }
@@ -122,6 +110,42 @@ onUnmounted(() => {
 })
 
 watch(flowDays, loadFlow)
+
+// 立即采集当前标的（日线 + 资金流 + 分钟线），完成后重新加载页面数据
+const refreshing = ref(false)
+
+async function refreshSymbolData() {
+  if (refreshing.value) return
+  refreshing.value = true
+  try {
+    const job = await triggerCollectSymbol(props.symbol)
+    const started = Date.now()
+    while (Date.now() - started < 90000) {
+      await new Promise((r) => setTimeout(r, 2000))
+      let state = ''
+      try {
+        state = (await getCollectStatus(job.jobId)).state
+      } catch {
+        continue // 状态查询偶发失败，继续轮询
+      }
+      if (state === 'Succeeded') {
+        ElMessage.success('数据已更新')
+        await Promise.all([loadPerf(), loadKLine(), loadFlow()])
+        if (isFund.value) loadEstimate()
+        return
+      }
+      if (state === 'Failed') {
+        ElMessage.error('采集失败，请稍后重试（详见 /hangfire 面板）')
+        return
+      }
+    }
+    ElMessage.warning('采集超时，任务仍在后台执行，请稍后刷新页面')
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message ?? '触发采集失败')
+  } finally {
+    refreshing.value = false
+  }
+}
 </script>
 
 <template>
@@ -133,6 +157,8 @@ watch(flowDays, loadFlow)
         <h3>{{ perf.name }} <span class="code">{{ perf.symbol }}</span></h3>
         <el-tag>{{ typeLabel }}</el-tag>
         <span class="latest">最新：{{ perf.latestPrice }}（{{ perf.latestDate }}）</span>
+        <el-button size="small" :loading="refreshing" style="margin-left: auto"
+          @click="refreshSymbolData">刷新数据</el-button>
       </div>
     </div>
 
@@ -195,10 +221,10 @@ watch(flowDays, loadFlow)
             v-for="p in periods"
             :key="p.key"
             class="period-item"
-            :class="{ active: period === p.key, locked: p.locked }"
+            :class="{ active: period === p.key }"
             @click="pickPeriod(p.key)"
           >
-            {{ p.label }}{{ p.locked ? ' 🔒' : '' }}
+            {{ p.label }}
           </span>
         </div>
         <span v-if="!isFund" class="chart-title">K线走势（涨红跌绿，下方面量为成交量）</span>
@@ -219,12 +245,7 @@ watch(flowDays, loadFlow)
           <el-radio-button :value="60">近60日</el-radio-button>
         </el-radio-group>
       </div>
-      <template v-if="flowDenied">
-        <el-alert type="warning" :closable="false" show-icon
-          title="资金流明细为 VIP 功能"
-          description="普通用户可在自选列表查看近5日主力净流入汇总；升级 VIP 后可查看分类资金流图表。" />
-      </template>
-      <template v-else-if="flow">
+      <template v-if="flow">
         <div v-if="flow.items.length" style="margin-bottom: 8px">
           区间主力净流入合计：
           <b :class="pctClass(flow.cumulativeMainNet)">
@@ -261,5 +282,4 @@ watch(flowDays, loadFlow)
 }
 .period-item + .period-item { border-left: 1px solid #dcdfe6; }
 .period-item.active { background: #409eff; color: #fff; }
-.period-item.locked { color: #c0c4cc; }
 </style>

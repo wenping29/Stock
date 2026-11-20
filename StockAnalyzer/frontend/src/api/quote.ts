@@ -2,6 +2,7 @@ import http from './http'
 import type {
   SearchItem, KLineResponse, PerformanceData, MoneyFlowData, WatchlistItem, AdminUser,
   MarketIndex, MarketVolume, HsgtFlow, FxRate, Us10y, CnBond, IndexItem, IndexTrendData, SectorFlow,
+  MarketVolumeToday,
 } from '../types'
 
 export async function fetchMarketOverview(): Promise<MarketIndex[]> {
@@ -18,6 +19,12 @@ export async function fetchMarketVolumeSeries(
   granularity: 'day' | 'week' | 'month' | 'quarter' | 'year',
 ): Promise<MarketVolume> {
   const { data } = await http.get('/quote/market-volume-series', { params: { granularity } })
+  return data
+}
+
+/** 今日两市成交额分时累计曲线（读库分钟成交额）。 */
+export async function fetchMarketVolumeToday(): Promise<MarketVolumeToday> {
+  const { data } = await http.get('/quote/market-volume-today')
   return data
 }
 

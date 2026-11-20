@@ -387,6 +387,7 @@ public class CollectorService(AppDbContext db, IQuoteProvider provider, IConfigu
                         Price = t.Price,
                         Volume = t.Volume,
                         Avg = t.Avg,
+                        Amount = t.Amount,
                     });
                 }
                 await db.SaveChangesAsync();
@@ -412,6 +413,7 @@ public class CollectorService(AppDbContext db, IQuoteProvider provider, IConfigu
         await SyncIndexIntradayAsync();
         await SyncWatchlistDailyAsync();
         await SyncWatchlistMinutesAsync();
+        await SyncSectorMoneyFlowAsync();
     }
 
     private async Task UpsertIndicatorSeriesAsync(string symbol, IEnumerable<(DateTime Date, double Value, double? ChangePct)> rows)

@@ -24,3 +24,9 @@ export async function getCollectStatus(jobId: string): Promise<CollectJob> {
   const { data } = await http.get<CollectJob>(`/collect/status/${jobId}`)
   return data
 }
+
+/** 立即采集单个标的（日线 + 资金流 + 分钟线），返回作业供轮询。 */
+export async function triggerCollectSymbol(symbol: string): Promise<CollectJob> {
+  const { data } = await http.post<CollectJob>(`/collect/symbol/${symbol}`)
+  return data
+}

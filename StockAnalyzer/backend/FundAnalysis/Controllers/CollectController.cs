@@ -29,7 +29,7 @@ public class CollectController(
     /// 分类：indices(指数日K) / indicators(汇率·美债·中债) / intraday(指数日内分时) /
     /// watchlist(自选日线) / minutes(自选分钟) / stock-list(标的清单) /
     /// liquidity(央行流动性) / fundamentals(基本面选股) / fund-list(基金清单) /
-    /// sentiment(市场情绪) / all(全部)。
+    /// sentiment(市场情绪) / sector(行业板块资金流) / all(全部)。
     /// </remarks>
     [HttpPost("{category}")]
     public IActionResult Trigger(string category)
@@ -47,12 +47,25 @@ public class CollectController(
             "fundamentals" => backgroundJobs.Enqueue<FundamentalService>(s => s.SyncAllAsync()),
             "fund-list"    => backgroundJobs.Enqueue<FundService>(s => s.SyncFundListAsync()),
             "sentiment"    => backgroundJobs.Enqueue<MarketSentimentService>(s => s.SyncAsync()),
+            "sector"       => backgroundJobs.Enqueue<CollectorService>(s => s.SyncSectorMoneyFlowAsync()),
             "all"          => backgroundJobs.Enqueue<CollectorService>(s => s.SyncAllCategoriesAsync()),
             _              => null,
         };
         if (jobId is null)
             return BadRequest(new { message = $"未知采集分类：{category}" });
         return Ok(new CollectJobDto(jobId, key, "Enqueued", DateTime.UtcNow));
+    }
+
+    /// <summary>立即采集单个标的数据（日线 + 资金流 + 分钟线），用于个股详情数据缺失时按需刷新。</summary>
+    [HttpPost("symbol/{symbol}")]
+    public IActionResult TriggerSymbol(string symbol)
+    {
+        symbol = (symbol ?? string.Empty).Trim();
+        if (symbol.Length != 6 || !symbol.All(char.IsDigit))
+            return BadRequest(new { message = "标的代码格式不正确" });
+
+        var jobId = backgroundJobs.Enqueue<CollectorService>(s => s.SyncSymbolAsync(symbol));
+        return Ok(new CollectJobDto(jobId, $"symbol:{symbol}", "Enqueued", DateTime.UtcNow));
     }
 
     /// <summary>查询采集作业状态（Enqueued / Processing / Succeeded / Failed 等）。</summary>

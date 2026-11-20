@@ -5,8 +5,8 @@ namespace FundAnalysis.Services.Providers;
 /// <summary>外部行情数据提供者返回的原始条目。</summary>
 public record KLineItem(DateTime Time, double Open, double High, double Low, double Close, double Volume, double Amount, double ChangePct);
 
-/// <summary>日内分时点。Price=最新价，Avg=当日均价，Volume 单位：手。</summary>
-public record TrendPoint(DateTime Time, double Price, double Volume, double Avg);
+/// <summary>日内分时点。Price=最新价，Avg=当日均价，Volume 单位：手，Amount 为分钟成交额（元）。</summary>
+public record TrendPoint(DateTime Time, double Price, double Volume, double Avg, double Amount = 0);
 
 public record MoneyFlowItem(DateTime Date, double MainNet, double LargeNet, double MidNet, double SmallNet);
 

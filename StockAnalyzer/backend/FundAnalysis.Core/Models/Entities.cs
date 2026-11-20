@@ -302,6 +302,8 @@ public class IndexIntraday
     public double Volume { get; set; }
     /// <summary>当日累计均价（服务端按分钟价累加计算）。</summary>
     public double Avg { get; set; }
+    /// <summary>分钟成交额（元），用于两市成交额分时累计曲线。</summary>
+    public double Amount { get; set; }
 }
 
 // ---------- 市场情绪 ----------

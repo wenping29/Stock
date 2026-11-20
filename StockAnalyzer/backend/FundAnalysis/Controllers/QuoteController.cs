@@ -405,6 +405,40 @@ public class QuoteController(
             dto.Points));
     }
 
+    /// <summary>今日两市成交额分时累计曲线（读库，不现拉第三方；采集器每 2 分钟入库分钟成交额）。</summary>
+    [Authorize]
+    [HttpGet("market-volume-today")]
+    public async Task<IActionResult> MarketVolumeToday()
+    {
+        var latestTime = await db.IndexIntradays
+            .Where(x => (x.Code == "000001" || x.Code == "399106") && x.Amount > 0)
+            .OrderByDescending(x => x.Time)
+            .Select(x => (DateTime?)x.Time)
+            .FirstOrDefaultAsync();
+        if (latestTime is null)
+            return Ok(new MarketVolumeTodayDto("", []));
+
+        var date = latestTime.Value.Date;
+        var rows = await db.IndexIntradays
+            .Where(x => (x.Code == "000001" || x.Code == "399106") && x.Time.Date == date)
+            .OrderBy(x => x.Time)
+            .Select(x => new { x.Time, x.Amount })
+            .ToListAsync();
+
+        double cumulative = 0;
+        var points = rows
+            .GroupBy(r => r.Time)
+            .OrderBy(g => g.Key)
+            .Select(g =>
+            {
+                cumulative += g.Sum(r => r.Amount);
+                return new MarketVolumeCurvePointDto(g.Key.ToString("HH:mm"), Math.Round(cumulative / 1e8, 1));
+            })
+            .ToList();
+
+        return Ok(new MarketVolumeTodayDto(date.ToString("yyyy-MM-dd"), points));
+    }
+
     /// <summary>从 IndexDaily 聚合两市成交量序列（沪=上证指数 000001，深=深证综指 399106）。</summary>
     private async Task<MarketVolumeDto> BuildVolumeSeriesAsync(string granularity, int limit)
     {
@@ -481,7 +515,7 @@ public class QuoteController(
         return Ok(new { basic.Symbol, basic.Name, basic.Type, market = basic.SecMarket == 1 ? "沪" : "深/北" });
     }
 
-    /// <summary>多周期 K 线。小时线（分钟数据）需要 VIP 或 Admin 角色。</summary>
+    /// <summary>多周期 K 线。</summary>
     [Authorize]
     [HttpGet("kline")]
     public async Task<IActionResult> KLine(
@@ -491,9 +525,6 @@ public class QuoteController(
     {
         if (period is not ("hour" or "day" or "week" or "month"))
             return BadRequest(new { message = "period 只支持 hour/day/week/month" });
-
-        if (period == "hour" && !User.IsInRole("VIP") && !User.IsInRole("Admin"))
-            return Forbid();
 
         var result = await analysis.GetKLineAsync(symbol, period, Math.Clamp(limit, 1, 800));
         if (result is null) return NotFound(new { message = $"未找到标的 {symbol} 或该周期无数据" });
@@ -510,8 +541,8 @@ public class QuoteController(
         return Ok(result);
     }
 
-    /// <summary>每日资金流明细（主力/大单/中单/小单）。需要 VIP 或 Admin 角色。</summary>
-    [Authorize(Roles = "VIP,Admin")]
+    /// <summary>每日资金流明细（主力/大单/中单/小单）。</summary>
+    [Authorize]
     [HttpGet("moneyflow")]
     public async Task<IActionResult> MoneyFlow([FromQuery] string symbol, [FromQuery] int days = 30)
     {

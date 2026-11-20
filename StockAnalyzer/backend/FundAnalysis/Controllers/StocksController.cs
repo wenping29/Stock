@@ -1,14 +1,16 @@
+using FundAnalysis.Data;
 using FundAnalysis.Models;
 using FundAnalysis.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace FundAnalysis.Controllers;
 
 /// <summary>个股浏览：全市场 A 股按板块（沪市主板/科创板/深市主板/创业板/北交所）浏览。登录即可使用。</summary>
 [ApiController]
 [Route("api/stocks")]
-public class StocksController(FundamentalService fundamental) : ControllerBase
+public class StocksController(FundamentalService fundamental, AppDbContext db) : ControllerBase
 {
     private static string BoardOf(string symbol) =>
         FundamentalService.Boards
@@ -42,9 +44,21 @@ public class StocksController(FundamentalService fundamental) : ControllerBase
         pageSize = Math.Clamp(pageSize, 10, 100);
 
         var (total, items) = await fundamental.GetStocksAsync(board, keyword, industry, sort, desc, page, pageSize);
-        return Ok(new StockListResponse(total, page, pageSize, items.Select(x => new StockListItemDto(
-            x.Symbol, x.Name, x.Industry, BoardOf(x.Symbol),
-            x.ClosePrice, x.ChangePct, x.PeTtm, x.PbMrq,
-            x.MarketCap, x.Roe, x.RevenueYoY, x.NetProfitYoY)).ToList()));
+
+        // 上证指数按总市值加权且覆盖全部沪市 A 股，故权重 = 个股总市值 / 沪市 A 股总市值
+        var shTotalCap = await db.StockFundamentals
+            .Where(x => x.Symbol.StartsWith("6") && x.MarketCap > 0)
+            .SumAsync(x => x.MarketCap ?? 0);
+
+        return Ok(new StockListResponse(total, page, pageSize, items.Select(x =>
+        {
+            var weight = shTotalCap > 0 && x.Symbol.StartsWith("6") && x.MarketCap > 0
+                ? Math.Round(x.MarketCap!.Value / shTotalCap * 100, 4)
+                : (double?)null;
+            return new StockListItemDto(
+                x.Symbol, x.Name, x.Industry, BoardOf(x.Symbol),
+                x.ClosePrice, x.ChangePct, x.PeTtm, x.PbMrq,
+                x.MarketCap, x.Roe, x.RevenueYoY, x.NetProfitYoY, weight);
+        }).ToList()));
     }
 }
