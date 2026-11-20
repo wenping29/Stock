@@ -18,13 +18,22 @@ const items = ref<IndexItem[]>([])
 const loading = ref(true)
 
 const selected = ref<IndexItem | null>(null)
-const period = ref<'day' | 'week' | 'month'>('day')
+type PeriodKey = '60min' | 'day' | 'week' | 'month'
+const period = ref<PeriodKey>('day')
 
-const PERIOD_MAP: Record<'day' | 'week' | 'month', KlinePeriod> = {
+const PERIOD_MAP: Record<PeriodKey, KlinePeriod> = {
+  '60min': '60min',
   day: 'daily',
   week: 'weekly',
   month: 'monthly',
 }
+const PERIOD_LABELS: Record<PeriodKey, string> = {
+  '60min': '60分',
+  day: '日',
+  week: '周',
+  month: '月',
+}
+const PERIOD_KEYS = Object.keys(PERIOD_LABELS) as PeriodKey[]
 
 /** 量化接口 KlineData（date/amount）转指数页图表点（time/changePct）。 */
 function toKlinePoints(rows: KlineData[]): KLinePoint[] {
@@ -104,7 +113,7 @@ function select(item: IndexItem) {
   loadTabData()
 }
 
-function pickPeriod(p: 'day' | 'week' | 'month') {
+function pickPeriod(p: PeriodKey) {
   if (period.value === p) return
   period.value = p
   loadTabData()
@@ -218,9 +227,9 @@ onMounted(load)
       <!-- K 线类 Tab 的周期切换 -->
       <div class="chart-toolbar" v-if="tab === 'kline' || tab === 'bigkline'">
         <div class="period-tabs">
-          <span v-for="p in (['day', 'week', 'month'] as const)" :key="p"
+          <span v-for="p in PERIOD_KEYS" :key="p"
             class="period-item" :class="{ active: period === p }" @click="pickPeriod(p)">
-            {{ { day: '日', week: '周', month: '月' }[p] }}
+            {{ PERIOD_LABELS[p] }}
           </span>
         </div>
         <span class="chart-title">

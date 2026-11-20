@@ -60,7 +60,10 @@ public partial class AnalysisDataService(AppDbContext db, IQuoteProvider quotes,
         {
             if (!IsIndexCode(code))
                 throw new AnalysisRequestException($"{code} 暂不支持 60 分钟周期");
-            return await GetHourKlineAsync(code, startDate, endDate, ct);
+            var hourRows = await GetHourKlineAsync(code, startDate, endDate, ct);
+            if (limit is > 0 && hourRows.Count > limit)
+                hourRows = hourRows.Skip(hourRows.Count - limit.Value).ToList();
+            return hourRows;
         }
 
         var daily = await GetDailyAsync(code, startDate, endDate, ct, allowFetch: true, isIndex: true);
@@ -305,7 +308,8 @@ public partial class AnalysisDataService(AppDbContext db, IQuoteProvider quotes,
         {
             var change = prev > 0 ? (r.Close / prev - 1) * 100 : 0;
             result.Add(new AnalysisKline(
-                r.Date.ToString("yyyyMMdd"), r.Open, r.High, r.Low, r.Close, r.Volume, r.Amount)
+                r.Date.ToString(r.Date.TimeOfDay == TimeSpan.Zero ? "yyyyMMdd" : "yyyy-MM-dd HH:mm"),
+                r.Open, r.High, r.Low, r.Close, r.Volume, r.Amount)
             { ChangePct = Math.Round(change, 2) });
             prev = r.Close;
         }

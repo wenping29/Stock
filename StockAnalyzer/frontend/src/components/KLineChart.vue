@@ -92,7 +92,11 @@ function render() {
       { left: 60, right: 20, top: '74%', height: '14%' },
     ],
     xAxis: [
-      { type: 'category', data: times, boundaryGap: true, axisLine: { lineStyle: { color: '#c0c4cc' } } },
+      {
+        type: 'category', data: times, boundaryGap: true, axisLine: { lineStyle: { color: '#c0c4cc' } },
+        // 60 分钟等带时刻的标签去掉年份，避免拥挤
+        axisLabel: { formatter: (v: string) => (v.length > 10 ? v.slice(5) : v) },
+      },
       { type: 'category', gridIndex: 1, data: times, boundaryGap: true, axisLabel: { show: false }, axisTick: { show: false } },
     ],
     yAxis: [
