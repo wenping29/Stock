@@ -6,6 +6,11 @@
 //   "http://1.2.3.4:5200"   前后端分离直连后端地址（需在后端 Cors:Origins 配置前端域名）
 //
 // 示例：window.__APP_CONFIG__ = { apiBase: "http://43.142.147.244:5200" };
+//
+// analysisApiBase 为量化分析服务（大盘/技术指标/回测/优化/监控）地址：
+//   ""                      默认：走同源 /analysis-api，由 nginx 反代到分析服务（端口 3001）
+//   "http://1.2.3.4:3001"   前后端直连分析服务（该服务已开启 CORS）
 window.__APP_CONFIG__ = {
   apiBase: "",
+  analysisApiBase: "",
 };

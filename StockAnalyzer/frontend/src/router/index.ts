@@ -16,6 +16,13 @@ const router = createRouter({
     { path: '/screener', component: () => import('../views/ScreenerView.vue') },
     { path: '/liquidity', component: () => import('../views/LiquidityView.vue') },
     { path: '/sentiment', component: () => import('../views/SentimentView.vue') },
+    // 量化分析（迁移自 stock-analyzer）
+    { path: '/market', component: () => import('../views/analysis/MarketView.vue') },
+    { path: '/technical', component: () => import('../views/analysis/IndicatorsView.vue') },
+    { path: '/multi-factor', component: () => import('../views/analysis/MultiFactorView.vue') },
+    { path: '/backtest', component: () => import('../views/analysis/BacktestView.vue') },
+    { path: '/optimization', component: () => import('../views/analysis/OptimizationView.vue') },
+    { path: '/monitor', component: () => import('../views/analysis/MonitoringView.vue') },
     { path: '/analysis/:symbol', component: () => import('../views/AnalysisView.vue'), props: true },
     { path: '/admin', component: () => import('../views/AdminView.vue'), meta: { admin: true } },
     { path: '/:pathMatch(.*)*', component: () => import('../views/NotFoundView.vue') },
