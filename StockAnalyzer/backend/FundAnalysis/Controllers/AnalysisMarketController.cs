@@ -8,10 +8,6 @@ namespace FundAnalysis.Controllers;
 [Route("api/analysis/market")]
 public sealed class AnalysisMarketController(MarketAnalysisService market) : ControllerBase
 {
-    [HttpGet("indexes")]
-    public async Task<IActionResult> Indexes(CancellationToken ct)
-        => Ok(new { success = true, data = await market.GetIndexQuotesAsync(ct) });
-
     [HttpGet("macro")]
     public async Task<IActionResult> Macro(CancellationToken ct)
         => Ok(new { success = true, data = await market.GetMacroAsync(ct) });

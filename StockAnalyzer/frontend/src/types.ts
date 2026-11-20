@@ -222,6 +222,8 @@ export interface IndexItem {
   changePct: number
   amount: number
   trend: number[]
+  /** 主力净流入（元，仅行业指数有值） */
+  mainInflow?: number | null
 }
 
 export interface IndicesData {

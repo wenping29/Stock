@@ -169,13 +169,29 @@ public class QuoteController(
         return Ok(dto);
     }
 
-    /// <summary>指数页面清单（A股宽基 / 风格 / 跨境），数据来自 IndexDaily 采集表（无实时外呼）。</summary>
+    /// <summary>
+    /// 指数清单（A股宽基 / 风格 / 行业 / 跨境），数据来自 IndexDaily 采集表（无实时外呼）。
+    /// scope=overview 时只返回大盘行情页的 12 个核心指数。
+    /// </summary>
     [Authorize]
     [HttpGet("indices")]
-    public async Task<IActionResult> Indices()
+    public async Task<IActionResult> Indices([FromQuery] string? scope)
     {
+        var catalog = scope == "overview"
+            ? MarketIndices.MarketOverviewCodes.Select(c => MarketIndices.List.First(i => i.Code == c))
+            : MarketIndices.List;
+
+        // 行业指数的主力净流入：取 SectorMoneyFlows 最新交易日，按板块名映射
+        var latestFlowDate = await db.SectorMoneyFlows.MaxAsync(x => (DateTime?)x.Date);
+        var sectorNames = MarketIndices.SectorNames.Values.ToList();
+        var flows = latestFlowDate is null
+            ? new Dictionary<string, double>()
+            : await db.SectorMoneyFlows
+                .Where(x => x.Date == latestFlowDate && sectorNames.Contains(x.Name))
+                .ToDictionaryAsync(x => x.Name, x => x.MainNet);
+
         var result = new List<IndexItemDto>();
-        foreach (var (code, name, group, market) in MarketIndices.List)
+        foreach (var (code, name, group, market) in catalog)
         {
             // 最近 31 根日线：最新快照 + 30 日迷你走势
             var rows = await db.IndexDailies
@@ -187,11 +203,14 @@ public class QuoteController(
             rows.Reverse();
 
             var last = rows[^1];
+            double? inflow = MarketIndices.SectorNames.TryGetValue(code, out var sector)
+                             && flows.TryGetValue(sector, out var net) ? net : null;
             result.Add(new IndexItemDto(
                 code, name, group,
                 last.Close, last.ChangePct,
                 Math.Round(last.Amount / 1e8, 1),
-                rows.Select(r => r.Close).ToList()));
+                rows.Select(r => r.Close).ToList(),
+                inflow));
         }
 
         return Ok(new IndicesResponse(result));

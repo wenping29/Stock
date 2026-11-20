@@ -55,11 +55,6 @@ export async function fetchStockDetail(code: string): Promise<{ info: StockInfo;
 
 // ---- 行情 ----
 
-export async function fetchMarketIndexes(): Promise<RealtimeQuote[]> {
-  const { data } = await analysisHttp.get('/market/indexes')
-  return data.data
-}
-
 export async function fetchMacroIndicators(): Promise<MacroIndicator[]> {
   const { data } = await analysisHttp.get('/market/macro')
   return data.data

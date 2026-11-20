@@ -54,8 +54,9 @@ export async function fetchCnBond(days = 90): Promise<CnBond> {
   return data
 }
 
-export async function fetchIndices(): Promise<IndexItem[]> {
-  const { data } = await http.get('/quote/indices')
+/** 指数清单；scope='overview' 时只取大盘行情页的 12 个核心指数。 */
+export async function fetchIndices(scope?: 'overview'): Promise<IndexItem[]> {
+  const { data } = await http.get('/quote/indices', { params: scope ? { scope } : undefined })
   return data.items
 }
 
