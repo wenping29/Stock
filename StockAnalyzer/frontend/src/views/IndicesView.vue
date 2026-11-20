@@ -345,12 +345,6 @@ onMounted(() => {
         </div>
         <span class="chart-title">预设 1月/3月/6月/1年/全部 · 自定义起止日期 · K线 / 折线切换 · 美债叠加（图表右上角可全屏）</span>
       </div>
-      <div class="ind-tabs" v-if="tab === 'quote'">
-        <span v-for="b in IND_BUTTONS" :key="b.key"
-          class="ind-chip" :class="{ active: activeInds.has(b.key) }" @click="toggleInd(b.key)">
-          {{ b.label }}
-        </span>
-      </div>
 
       <!-- K 线类 Tab 的周期切换 -->
       <div class="chart-toolbar" v-else-if="tab === 'kline' || tab === 'bigkline'">
@@ -383,7 +377,14 @@ onMounted(() => {
           :kline-data="klineData" :indicators="overlayInds"
           :show-volume="activeInds.has('VOL')"
           :us-rate-data="usRate" :us-rate-label="rateMaturity"
-          @range-change="onQuoteRangeChange" />
+          @range-change="onQuoteRangeChange">
+          <template #toolbar>
+            <span v-for="b in IND_BUTTONS" :key="b.key"
+              class="ind-chip" :class="{ active: activeInds.has(b.key) }" @click="toggleInd(b.key)">
+              {{ b.label }}
+            </span>
+          </template>
+        </StockChart>
         <template v-if="tab === 'quote'">
           <IndicatorChart
             v-for="ind in paneInds" :key="ind.name"
@@ -443,10 +444,9 @@ onMounted(() => {
 .chart-toolbar { display: flex; align-items: center; gap: 16px; margin-bottom: 10px; flex-wrap: wrap; }
 .chart-title { color: #606266; font-size: 13px; }
 
-/* 技术指标开关（成交量/MA/BOLL/MACD/RSI） */
-.ind-tabs { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+/* 技术指标开关（成交量/MA/BOLL/MACD/RSI），渲染在 StockChart 工具栏美债按钮之后 */
 .ind-chip {
-  padding: 3px 12px; font-size: 12px; color: #606266; background: #f5f7fa;
+  padding: 3px 10px; font-size: 12px; color: #606266; background: #f5f7fa;
   border: 1px solid #dcdfe6; border-radius: 4px; cursor: pointer; user-select: none;
 }
 .ind-chip:hover { color: #409eff; border-color: #a0cfff; }

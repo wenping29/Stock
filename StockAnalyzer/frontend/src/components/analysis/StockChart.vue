@@ -361,6 +361,8 @@ const presets: { label: string; val: number | 'all' }[] = [
         :class="{ active: showUsRate }"
         @click="showUsRate = !showUsRate"
       >美债{{ usRateLabel }}</button>
+      <!-- 附加工具（如技术指标开关），排在美债按钮之后 -->
+      <slot name="toolbar" />
     </div>
     <div
       ref="el"

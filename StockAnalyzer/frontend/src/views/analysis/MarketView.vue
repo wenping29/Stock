@@ -496,14 +496,6 @@ const goldChart = computed(() => ({
           >{{ t.label }}</span>
         </div>
 
-        <div class="ind-tabs" v-if="chartTab === 'quote'">
-          <span
-            v-for="b in IND_BUTTONS" :key="b.key"
-            class="ind-chip" :class="{ active: activeInds.has(b.key) }"
-            @click="toggleInd(b.key)"
-          >{{ b.label }}</span>
-        </div>
-
         <div class="chart-toolbar" v-if="chartTab !== 'quote'">
           <div class="period-tabs" v-if="chartTab === 'kline' || chartTab === 'bigkline'">
             <span
@@ -534,7 +526,15 @@ const goldChart = computed(() => ({
             :us-rate-data="usRate"
             :us-rate-label="rateMaturity"
             @range-change="onKlineRangeChange"
-          />
+          >
+            <template #toolbar>
+              <span
+                v-for="b in IND_BUTTONS" :key="b.key"
+                class="ind-chip" :class="{ active: activeInds.has(b.key) }"
+                @click="toggleInd(b.key)"
+              >{{ b.label }}</span>
+            </template>
+          </StockChart>
           <template v-if="chartTab === 'quote'">
             <IndicatorChart
               v-for="ind in paneInds" :key="ind.name"
@@ -688,10 +688,9 @@ const goldChart = computed(() => ({
 
 .chart-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
 
-/* 技术指标开关（成交量/MA/BOLL/MACD/RSI） */
-.ind-tabs { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+/* 技术指标开关（成交量/MA/BOLL/MACD/RSI），渲染在 StockChart 工具栏美债按钮之后 */
 .ind-chip {
-  padding: 3px 12px; font-size: 12px; color: #606266; background: #f5f7fa;
+  padding: 3px 10px; font-size: 12px; color: #606266; background: #f5f7fa;
   border: 1px solid #dcdfe6; border-radius: 4px; cursor: pointer; user-select: none;
 }
 .ind-chip:hover { color: #409eff; border-color: #a0cfff; }
