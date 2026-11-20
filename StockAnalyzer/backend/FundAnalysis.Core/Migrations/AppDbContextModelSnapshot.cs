@@ -909,6 +909,82 @@ namespace FundAnalysis.Migrations
                     b.ToTable("StockDailies");
                 });
 
+            modelBuilder.Entity("FundAnalysis.Models.StockFinancialReport", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<double?>("Bps")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("DataJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<double?>("DebtRatio")
+                        .HasColumnType("double precision");
+
+                    b.Property<double?>("Eps")
+                        .HasColumnType("double precision");
+
+                    b.Property<double?>("GrossMargin")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<double?>("NetMargin")
+                        .HasColumnType("double precision");
+
+                    b.Property<double?>("NetProfit")
+                        .HasColumnType("double precision");
+
+                    b.Property<double?>("NetProfitYoY")
+                        .HasColumnType("double precision");
+
+                    b.Property<double?>("OcfPerShare")
+                        .HasColumnType("double precision");
+
+                    b.Property<DateTime>("ReportDate")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("ReportType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<double?>("Revenue")
+                        .HasColumnType("double precision");
+
+                    b.Property<double?>("RevenueYoY")
+                        .HasColumnType("double precision");
+
+                    b.Property<double?>("Roe")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("Symbol")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReportDate");
+
+                    b.HasIndex("Symbol", "ReportDate")
+                        .IsUnique();
+
+                    b.ToTable("StockFinancialReports");
+                });
+
             modelBuilder.Entity("FundAnalysis.Models.StockFundamental", b =>
                 {
                     b.Property<long>("Id")

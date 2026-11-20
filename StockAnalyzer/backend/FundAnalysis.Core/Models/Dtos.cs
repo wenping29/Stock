@@ -165,6 +165,13 @@ public record StockListItemDto(
 
 public record StockListResponse(int Total, int Page, int PageSize, List<StockListItemDto> Items);
 
+/// <summary>个股单期财务摘要（金额单位：亿元，比率为 %）。</summary>
+public record FinancialReportDto(
+    string Symbol, string Name, string ReportDate, string ReportType,
+    double? Eps, double? Bps, double? Roe,
+    double? Revenue, double? RevenueYoY, double? NetProfit, double? NetProfitYoY,
+    double? GrossMargin, double? NetMargin, double? DebtRatio, double? OcfPerShare);
+
 public record BoardStatDto(string Key, string Name, int Count);
 
 /// <summary>沪深港通（北上/南下）资金。单位：亿元。</summary>

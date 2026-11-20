@@ -28,6 +28,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
     public DbSet<OmoOperation> OmoOperations => Set<OmoOperation>();
     public DbSet<IndexDaily> IndexDailies => Set<IndexDaily>();
     public DbSet<StockFundamental> StockFundamentals => Set<StockFundamental>();
+    public DbSet<StockFinancialReport> StockFinancialReports => Set<StockFinancialReport>();
     public DbSet<AlertRule> AlertRules => Set<AlertRule>();
     public DbSet<MarketIndicator> MarketIndicators => Set<MarketIndicator>();
     public DbSet<IndexIntraday> IndexIntradays => Set<IndexIntraday>();
@@ -148,6 +149,15 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
         {
             e.HasIndex(x => x.Symbol).IsUnique();
             e.HasIndex(x => x.Industry);
+        });
+
+        b.Entity<StockFinancialReport>(e =>
+        {
+            e.HasIndex(x => new { x.Symbol, x.ReportDate }).IsUnique();
+            e.HasIndex(x => x.ReportDate);
+            e.Property(x => x.Symbol).HasMaxLength(12);
+            e.Property(x => x.Name).HasMaxLength(40);
+            e.Property(x => x.ReportType).HasMaxLength(20);
         });
 
         b.Entity<AlertRule>(e =>

@@ -253,6 +253,50 @@ public class StockFundamental
     public DateTime UpdatedAt { get; set; } = DateTime.Now;
 }
 
+/// <summary>
+/// 个股多期财务摘要（东财 F10 主要财务指标 RPT_F10_FINANCE_MAINFINADATA，按报告期留存）。
+/// 与 StockFundamental 不同：后者只有最新报告期快照，本表用于营收/利润等指标的多期趋势。
+/// 金额单位：亿元（与 StockFundamental 一致，原始元值可在 DataJson 中取）。
+/// </summary>
+public class StockFinancialReport
+{
+    public long Id { get; set; }
+    public string Symbol { get; set; } = "";
+    public string Name { get; set; } = "";
+    /// <summary>报告期（如 2025-09-30）。</summary>
+    public DateTime ReportDate { get; set; }
+    /// <summary>报告类型：一季报 / 中报 / 三季报 / 年报。</summary>
+    public string ReportType { get; set; } = "";
+
+    /// <summary>基本每股收益（元）。</summary>
+    public double? Eps { get; set; }
+    /// <summary>每股净资产（元）。</summary>
+    public double? Bps { get; set; }
+    /// <summary>加权净资产收益率（%）。</summary>
+    public double? Roe { get; set; }
+    /// <summary>营业总收入（亿元）。</summary>
+    public double? Revenue { get; set; }
+    /// <summary>营收同比增长（%）。</summary>
+    public double? RevenueYoY { get; set; }
+    /// <summary>归母净利润（亿元）。</summary>
+    public double? NetProfit { get; set; }
+    /// <summary>净利润同比增长（%）。</summary>
+    public double? NetProfitYoY { get; set; }
+    /// <summary>销售毛利率（%）。</summary>
+    public double? GrossMargin { get; set; }
+    /// <summary>销售净利率（%）。</summary>
+    public double? NetMargin { get; set; }
+    /// <summary>资产负债率（%）。</summary>
+    public double? DebtRatio { get; set; }
+    /// <summary>每股经营现金流（元）。</summary>
+    public double? OcfPerShare { get; set; }
+
+    /// <summary>东财原始数值字段（JSON），保留完整口径便于后续扩展。</summary>
+    public string DataJson { get; set; } = "{}";
+
+    public DateTime UpdatedAt { get; set; } = DateTime.Now;
+}
+
 /// <summary>自选价格提醒规则。</summary>
 public class AlertRule
 {

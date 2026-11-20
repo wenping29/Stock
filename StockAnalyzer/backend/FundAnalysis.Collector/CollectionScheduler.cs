@@ -35,12 +35,14 @@ public class CollectionScheduler(IServiceProvider services, ILogger<CollectionSc
                     var collector = scope.ServiceProvider.GetRequiredService<CollectorService>();
                     var liquidity = scope.ServiceProvider.GetRequiredService<LiquidityService>();
                     var fundamentals = scope.ServiceProvider.GetRequiredService<FundamentalService>();
+                    var financials = scope.ServiceProvider.GetRequiredService<FinancialReportService>();
                     var sentiment = scope.ServiceProvider.GetRequiredService<MarketSentimentService>();
                     await collector.SyncWatchlistDailyAsync();
                     await liquidity.SyncAllAsync();
                     await collector.SyncIndicesAsync();
                     await collector.SyncMarketIndicatorsAsync();
                     await fundamentals.SyncAllAsync();
+                    await financials.SyncWatchlistAsync();
                     await sentiment.SyncAsync();
                     lastDaily = now;
                     logger.LogInformation("每日全量同步完成");

@@ -10,7 +10,7 @@ namespace FundAnalysis.Controllers;
 /// <summary>个股浏览：全市场 A 股按板块（沪市主板/科创板/深市主板/创业板/北交所）浏览。登录即可使用。</summary>
 [ApiController]
 [Route("api/stocks")]
-public class StocksController(FundamentalService fundamental, AppDbContext db) : ControllerBase
+public class StocksController(FundamentalService fundamental, FinancialReportService financials, AppDbContext db) : ControllerBase
 {
     private static string BoardOf(string symbol) =>
         FundamentalService.Boards
@@ -60,5 +60,22 @@ public class StocksController(FundamentalService fundamental, AppDbContext db) :
                 x.ClosePrice, x.ChangePct, x.PeTtm, x.PbMrq,
                 x.MarketCap, x.Roe, x.RevenueYoY, x.NetProfitYoY, weight);
         }).ToList()));
+    }
+
+    /// <summary>个股多期财务摘要（报告期倒序，最多 40 期）。</summary>
+    [Authorize]
+    [HttpGet("{symbol}/financials")]
+    public async Task<IActionResult> Financials(string symbol, [FromQuery] int limit = 20)
+    {
+        symbol = (symbol ?? string.Empty).Trim();
+        if (symbol.Length != 6 || !symbol.All(char.IsDigit))
+            return BadRequest(new { message = "标的代码格式不正确" });
+
+        var rows = await financials.GetAsync(symbol, Math.Clamp(limit, 1, 40));
+        return Ok(rows.Select(x => new FinancialReportDto(
+            x.Symbol, x.Name, x.ReportDate.ToString("yyyy-MM-dd"), x.ReportType,
+            x.Eps, x.Bps, x.Roe,
+            x.Revenue, x.RevenueYoY, x.NetProfit, x.NetProfitYoY,
+            x.GrossMargin, x.NetMargin, x.DebtRatio, x.OcfPerShare)).ToList());
     }
 }

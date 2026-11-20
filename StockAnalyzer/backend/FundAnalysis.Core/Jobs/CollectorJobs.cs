@@ -44,6 +44,10 @@ public static class CollectorJobs
         jobs.AddOrUpdate<FundamentalService>(
             "fundamentals-sync", s => s.SyncAllAsync(), "10 17 * * 1-5");
 
+        // 自选多期财报（东财 F10 主要财务指标）：交易日 17:20
+        jobs.AddOrUpdate<FinancialReportService>(
+            "financials-sync", s => s.SyncWatchlistAsync(), "20 17 * * 1-5");
+
         // 行业板块主力资金流（全市场一次拉取）：交易日 16:55
         jobs.AddOrUpdate<CollectorService>(
             "sector-flow-sync", s => s.SyncSectorMoneyFlowAsync(), "55 16 * * 1-5");
