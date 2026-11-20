@@ -23,6 +23,7 @@ const fx = ref<FxRate | null>(null)
 const us10y = ref<Us10y | null>(null)
 const cnBond = ref<CnBond | null>(null)
 const watchlist = ref<WatchlistItem[]>([])
+const rankTab = ref<'gainers' | 'losers'>('gainers')
 const liquidity = ref<LiquidityOverview | null>(null)
 const sectorFlow = ref<SectorFlow | null>(null)
 const loading = ref(true)
@@ -341,34 +342,24 @@ const reloadSector = () => refresh('sector', async () => {
           <SectorFlowChart :items="sectorFlow.items" />
           <div class="hsgt-note">红色=主力净流入，绿色=净流出，颜色越深规模越大；单位为亿元</div>
         </div>
-      </div>
-    </div>
 
-    <!-- 今日涨跌榜 -->
-    <div class="two-col" v-if="watchlist.length">
-      <div class="page-card">
-        <div class="card-head">
-          <h4>今日涨幅榜</h4>
-          <el-button link size="small" type="primary" :loading="busy('watch')" @click="reloadWatch">刷新</el-button>
-        </div>
-        <div class="rank-list">
-          <div v-for="w in topGainers" :key="w.symbol" class="rank-item" @click="router.push(`/analysis/${w.symbol}`)">
-            <span class="rank-name">{{ w.name }}</span>
-            <span class="rank-code">{{ w.symbol }}</span>
-            <span class="rank-pct up">{{ fmtPct(w.changePct) }}</span>
+        <!-- 今日涨跌榜（涨幅/跌幅同卡切换） -->
+        <div class="page-card" v-if="watchlist.length">
+          <div class="card-head">
+            <h4>今日涨跌榜</h4>
+            <el-button link size="small" type="primary" :loading="busy('watch')" @click="reloadWatch">刷新</el-button>
           </div>
-        </div>
-      </div>
-      <div class="page-card">
-        <div class="card-head">
-          <h4>今日跌幅榜</h4>
-          <el-button link size="small" type="primary" :loading="busy('watch')" @click="reloadWatch">刷新</el-button>
-        </div>
-        <div class="rank-list">
-          <div v-for="w in topLosers" :key="w.symbol" class="rank-item" @click="router.push(`/analysis/${w.symbol}`)">
-            <span class="rank-name">{{ w.name }}</span>
-            <span class="rank-code">{{ w.symbol }}</span>
-            <span class="rank-pct down">{{ fmtPct(w.changePct) }}</span>
+          <div class="volume-tabs">
+            <span class="vol-tab" :class="{ active: rankTab === 'gainers' }" @click="rankTab = 'gainers'">涨幅榜</span>
+            <span class="vol-tab" :class="{ active: rankTab === 'losers' }" @click="rankTab = 'losers'">跌幅榜</span>
+          </div>
+          <div class="rank-list">
+            <div v-for="w in (rankTab === 'gainers' ? topGainers : topLosers)" :key="w.symbol"
+              class="rank-item" @click="router.push(`/analysis/${w.symbol}`)">
+              <span class="rank-name">{{ w.name }}</span>
+              <span class="rank-code">{{ w.symbol }}</span>
+              <span class="rank-pct" :class="(w.changePct ?? 0) >= 0 ? 'up' : 'down'">{{ fmtPct(w.changePct) }}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -393,13 +384,11 @@ const reloadSector = () => refresh('sector', async () => {
 .idx-head .label { font-size: 13px; white-space: nowrap; display: flex; align-items: center; gap: 4px; }
 .idx-head .value { font-size: 18px; }
 .u { font-size: 12px; color: #909399; }
-.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
 .rate-merged-head { gap: 20px; }
 .rate-stats { display: flex; gap: 28px; flex-wrap: wrap; font-size: 13px; color: #606266; }
 .rate-stats b { font-size: 16px; margin: 0 4px; }
 .rate-stats i { font-style: normal; font-size: 12px; margin-left: 2px; }
 .spread b { font-size: 16px; }
-@media (max-width: 1000px) { .two-col { grid-template-columns: 1fr; } }
 .card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .head-right { display: flex; align-items: center; gap: 12px; }
 .volume-tabs { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
