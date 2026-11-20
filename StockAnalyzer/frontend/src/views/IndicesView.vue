@@ -2,7 +2,9 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import type { IndexItem, IndexTrendData, KLinePoint } from '../types'
-import { fetchIndices, fetchIndexKline, fetchIndexTrend } from '../api/quote'
+import { fetchIndices, fetchIndexTrend } from '../api/quote'
+import { fetchIndexKline } from '../api/analysis'
+import type { KlineData, KlinePeriod } from '../types/analysis'
 import type { CollectCategory } from '../api/collect'
 import RefreshButton from '../components/RefreshButton.vue'
 import SparkLine from '../components/SparkLine.vue'
@@ -17,6 +19,29 @@ const loading = ref(true)
 
 const selected = ref<IndexItem | null>(null)
 const period = ref<'day' | 'week' | 'month'>('day')
+
+const PERIOD_MAP: Record<'day' | 'week' | 'month', KlinePeriod> = {
+  day: 'daily',
+  week: 'weekly',
+  month: 'monthly',
+}
+
+/** 量化接口 KlineData（date/amount）转指数页图表点（time/changePct）。 */
+function toKlinePoints(rows: KlineData[]): KLinePoint[] {
+  return rows.map((r, i) => ({
+    time: /^\d{8}$/.test(r.date)
+      ? `${r.date.slice(0, 4)}-${r.date.slice(4, 6)}-${r.date.slice(6, 8)}`
+      : r.date,
+    open: r.open,
+    high: r.high,
+    low: r.low,
+    close: r.close,
+    volume: r.volume,
+    changePct: i > 0 && rows[i - 1].close
+      ? Math.round((r.close / rows[i - 1].close - 1) * 10000) / 100
+      : 0,
+  }))
+}
 
 // 详情区 Tab：日K均线 / 大数据K线 / 股市矩阵 / 日内走势
 type TabKey = 'kline' | 'bigkline' | 'matrix' | 'intraday'
@@ -94,9 +119,10 @@ async function loadTabData() {
     klineLoading.value = true
     try {
       const limit = tab.value === 'bigkline' ? 500 : 120
-      const res = await fetchIndexKline(selected.value.code, period.value, limit)
-      if (tab.value === 'bigkline') bigPoints.value = res.points
-      else points.value = res.points
+      const rows = await fetchIndexKline(selected.value.code, '', '', PERIOD_MAP[period.value], limit)
+      const mapped = toKlinePoints(rows)
+      if (tab.value === 'bigkline') bigPoints.value = mapped
+      else points.value = mapped
     } finally {
       klineLoading.value = false
     }

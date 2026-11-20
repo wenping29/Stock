@@ -87,7 +87,7 @@ public sealed class ScreeningService(AppDbContext db, AnalysisDataService data)
         var end = AnalysisDataService.ParseDate(endDate, DateTime.Today);
         var p = AnalysisDataService.NormalizePeriod(period);
         var rows = AnalysisDataService.IsIndexCode(code)
-            ? await data.GetIndexKlineAsync(code, startDate, endDate, p, ct)
+            ? await data.GetIndexKlineAsync(code, startDate, endDate, p, ct: ct)
             : await data.GetKlineAsync(code, startDate, endDate, p, ct);
 
         if (rows.Count < 30) return new { passed = false, reason = "数据不足" };

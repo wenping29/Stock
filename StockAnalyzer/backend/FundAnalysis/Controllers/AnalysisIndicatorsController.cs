@@ -5,7 +5,7 @@ namespace FundAnalysis.Controllers;
 
 /// <summary>量化分析：指标清单与在线计算（对齐 /api/indicators）。</summary>
 [ApiController]
-[Route("api/indicators")]
+[Route("api/analysis/indicators")]
 public sealed class AnalysisIndicatorsController : ControllerBase
 {
     public sealed class ComputeRequest

@@ -59,13 +59,6 @@ export async function fetchIndices(): Promise<IndexItem[]> {
   return data.items
 }
 
-export async function fetchIndexKline(
-  code: string, period: 'day' | 'week' | 'month', limit = 120,
-): Promise<KLineResponse> {
-  const { data } = await http.get('/quote/index-kline', { params: { code, period, limit } })
-  return data
-}
-
 /** 指数日内分时走势（东财实时，后端按指数缓存 1 分钟）。 */
 export async function fetchIndexTrend(code: string): Promise<IndexTrendData> {
   const { data } = await http.get('/quote/index-trend', { params: { code } })

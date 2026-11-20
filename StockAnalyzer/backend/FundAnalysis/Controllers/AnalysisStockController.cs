@@ -8,7 +8,7 @@ namespace FundAnalysis.Controllers;
 
 /// <summary>量化分析：股票列表 / 搜索 / 详情 / K 线（对齐 stock-analyzer/server 的 /api/stock）。</summary>
 [ApiController]
-[Route("api/stock")]
+[Route("api/analysis/stock")]
 public sealed class AnalysisStockController(AppDbContext db, AnalysisDataService data) : ControllerBase
 {
     private static readonly Dictionary<string, Func<string, bool>> TypeMatchers = new()

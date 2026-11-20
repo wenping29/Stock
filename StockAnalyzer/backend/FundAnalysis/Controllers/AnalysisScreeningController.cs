@@ -5,7 +5,7 @@ namespace FundAnalysis.Controllers;
 
 /// <summary>量化分析：选股预设、全市场筛选与单票试算（对齐 /api/screening）。</summary>
 [ApiController]
-[Route("api/screening")]
+[Route("api/analysis/screening")]
 public sealed class AnalysisScreeningController(ScreeningService screening) : ControllerBase
 {
     public sealed class RunRequest

@@ -5,7 +5,7 @@ namespace FundAnalysis.Controllers;
 
 /// <summary>量化分析：大盘指数 / 宏观 / 利率 / 商品与汇率序列（对齐 /api/market）。</summary>
 [ApiController]
-[Route("api/market")]
+[Route("api/analysis/market")]
 public sealed class AnalysisMarketController(MarketAnalysisService market) : ControllerBase
 {
     [HttpGet("indexes")]
@@ -19,14 +19,15 @@ public sealed class AnalysisMarketController(MarketAnalysisService market) : Con
     [HttpGet("indexes/{code}/kline")]
     public async Task<IActionResult> IndexKline(
         string code, [FromQuery] string? start, [FromQuery] string? end,
-        [FromQuery] string period = "daily", CancellationToken ct = default)
+        [FromQuery] string period = "daily", [FromQuery] int? limit = null,
+        CancellationToken ct = default)
     {
         try
         {
             return Ok(new
             {
                 success = true,
-                data = await market.GetIndexKlineAsync(code, start, end, period, ct),
+                data = await market.GetIndexKlineAsync(code, start, end, period, limit, ct),
             });
         }
         catch (AnalysisRequestException ex)

@@ -1,5 +1,6 @@
 using System.Globalization;
 using FundAnalysis.Data;
+using FundAnalysis.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace FundAnalysis.Analysis;
@@ -69,8 +70,8 @@ public sealed class MarketAnalysisService(AppDbContext db, AnalysisDataService d
     }
 
     public async Task<List<AnalysisKline>> GetIndexKlineAsync(
-        string code, string? start, string? end, string period, CancellationToken ct = default)
-        => await data.GetIndexKlineAsync(NormalizeIndexCode(code), start, end, period, ct);
+        string code, string? start, string? end, string period, int? limit = null, CancellationToken ct = default)
+        => await data.GetIndexKlineAsync(NormalizeIndexCode(code), start, end, period, limit, ct);
 
     public async Task<Dictionary<string, object>> GetIndexPeriodDataAsync(
         string period, string[]? codes, string? start, string? end, CancellationToken ct = default)
@@ -79,7 +80,7 @@ public sealed class MarketAnalysisService(AppDbContext db, AnalysisDataService d
         var result = new Dictionary<string, object>();
         foreach (var code in requested)
         {
-            var rows = await data.GetIndexKlineAsync(NormalizeIndexCode(code), start, end, period, ct);
+            var rows = await data.GetIndexKlineAsync(NormalizeIndexCode(code), start, end, period, ct: ct);
             result[code] = new
             {
                 name = IndexNames.GetValueOrDefault(code, code),
@@ -294,6 +295,12 @@ public sealed class MarketAnalysisService(AppDbContext db, AnalysisDataService d
     {
         code = code.Trim();
         if (AnalysisDataService.IsIndexCode(code)) return code.ToLowerInvariant();
+
+        // 内置指数清单中的无前缀代码（HSI/NDX/DJIA/SPX 等跨境指数）
+        var known = MarketIndices.List.FirstOrDefault(i =>
+            string.Equals(i.Code, code, StringComparison.OrdinalIgnoreCase));
+        if (known.Code is not null) return known.Code;
+
         if (code.Length != 6 || !code.All(char.IsDigit))
             throw new AnalysisRequestException($"未知指数 {code}");
 

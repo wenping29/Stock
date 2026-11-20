@@ -48,18 +48,26 @@ public partial class AnalysisDataService(AppDbContext db, IQuoteProvider quotes,
     }
 
     public async Task<List<AnalysisKline>> GetIndexKlineAsync(
-        string code, string? start, string? end, string? period = "daily", CancellationToken ct = default)
+        string code, string? start, string? end, string? period = "daily", int? limit = null, CancellationToken ct = default)
     {
-        var startDate = ParseDate(start, new DateTime(2024, 1, 1));
+        // 指定 limit 而未指定起始日时尽量多取历史，再截取最近 limit 根
+        var startDate = ParseDate(start, limit is > 0 ? new DateTime(2000, 1, 1) : new DateTime(2024, 1, 1));
         var endDate = ParseDate(end, DateTime.Today);
         if (startDate > endDate) (startDate, endDate) = (endDate, startDate);
         period = NormalizePeriod(period);
 
         if (period == "60min")
+        {
+            if (!IsIndexCode(code))
+                throw new AnalysisRequestException($"{code} 暂不支持 60 分钟周期");
             return await GetHourKlineAsync(code, startDate, endDate, ct);
+        }
 
-        var daily = await GetDailyAsync(code, startDate, endDate, ct, allowFetch: true);
-        return Aggregate(daily, period, startDate, endDate);
+        var daily = await GetDailyAsync(code, startDate, endDate, ct, allowFetch: true, isIndex: true);
+        var rows = Aggregate(daily, period, startDate, endDate);
+        if (limit is > 0 && rows.Count > limit)
+            rows = rows.Skip(rows.Count - limit.Value).ToList();
+        return rows;
     }
 
     /// <summary>批量读取（选股/监控用）。DB 覆盖不足且标的数较少时才回源。</summary>
@@ -132,14 +140,17 @@ public partial class AnalysisDataService(AppDbContext db, IQuoteProvider quotes,
     }
 
     private async Task<List<AnalysisKline>> GetDailyAsync(
-        string code, DateTime startDate, DateTime endDate, CancellationToken ct, bool allowFetch)
+        string code, DateTime startDate, DateTime endDate, CancellationToken ct, bool allowFetch,
+        bool? isIndex = null)
     {
+        // 000001 既是上证指数也是平安银行，未加市场前缀时按个股处理，指数调用方显式传 isIndex
+        var index = isIndex ?? IsIndexCode(code);
         List<AnalysisKline> rows;
-        if (IsIndexCode(code))
+        if (index)
         {
-            var digits = code[2..];
+            var dbCode = IsIndexCode(code) ? code[2..] : code;
             var raw = await db.IndexDailies.AsNoTracking()
-                .Where(x => x.Code == digits && x.Date >= startDate && x.Date <= endDate)
+                .Where(x => x.Code == dbCode && x.Date >= startDate && x.Date <= endDate)
                 .OrderBy(x => x.Date)
                 .ToListAsync(ct);
             rows = ToKlines(raw.Select(x => (x.Date, x.Open, x.High, x.Low, x.Close, x.Volume, x.Amount)));
@@ -159,7 +170,7 @@ public partial class AnalysisDataService(AppDbContext db, IQuoteProvider quotes,
         {
             try
             {
-                var fetched = await FetchAndPersistDailyAsync(code, startDate, endDate, IsIndexCode(code), ct);
+                var fetched = await FetchAndPersistDailyAsync(code, startDate, endDate, index, ct);
                 if (fetched.Count > rows.Count) rows = fetched;
                 else if (fetched.Count > 0 && rows.Count == 0) rows = fetched;
             }
@@ -316,6 +327,9 @@ public partial class AnalysisDataService(AppDbContext db, IQuoteProvider quotes,
     {
         if (isIndex)
         {
+            if (!IsIndexCode(code))
+                return (code, MarketIndices.List.FirstOrDefault(i =>
+                    string.Equals(i.Code, code, StringComparison.OrdinalIgnoreCase)).Market);
             var prefix = code[..2].ToLowerInvariant();
             return (code[2..], prefix == "sh" ? 1 : 0);
         }

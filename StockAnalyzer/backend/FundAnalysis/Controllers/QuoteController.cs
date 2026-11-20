@@ -197,68 +197,6 @@ public class QuoteController(
         return Ok(new IndicesResponse(result));
     }
 
-    /// <summary>指数 K 线（day/week/month，查 IndexDaily 表内存聚合，无实时外呼）。</summary>
-    [Authorize]
-    [HttpGet("index-kline")]
-    public async Task<IActionResult> IndexKline(
-        [FromQuery] string code, [FromQuery] string period = "day", [FromQuery] int limit = 120)
-    {
-        if (period is not ("day" or "week" or "month"))
-            return BadRequest(new { message = "period 只支持 day/week/month" });
-        limit = Math.Clamp(limit, 30, 500);
-
-        var meta = MarketIndices.List.FirstOrDefault(i => i.Code == code);
-        if (meta == default) return NotFound(new { message = $"未知指数 {code}" });
-
-        var rows = await db.IndexDailies
-            .Where(x => x.Code == code)
-            .OrderBy(x => x.Date)
-            .ToListAsync();
-        if (rows.Count == 0)
-            return NotFound(new { message = $"指数 {code} 暂无数据，请等待采集任务完成" });
-
-        List<KLinePointDto> points;
-        if (period == "day")
-        {
-            points = rows
-                .Select(r => new KLinePointDto(
-                    r.Date.ToString("yyyy-MM-dd"), r.Open, r.High, r.Low, r.Close, r.Volume, r.ChangePct))
-                .ToList();
-        }
-        else
-        {
-            Func<DateTime, string> key = period == "week"
-                ? d => d.AddDays(-((int)d.DayOfWeek + 6) % 7).ToString("yyyy-MM-dd") // 本周一
-                : d => d.ToString("yyyy-MM");
-            points = rows
-                .GroupBy(r => key(r.Date))
-                .OrderBy(g => g.Key)
-                .Select(g =>
-                {
-                    var sorted = g.OrderBy(r => r.Date).ToList();
-                    return new KLinePointDto(
-                        g.Key,
-                        sorted[0].Open,
-                        sorted.Max(r => r.High),
-                        sorted.Min(r => r.Low),
-                        sorted[^1].Close,
-                        sorted.Sum(r => r.Volume), 0);
-                })
-                .ToList();
-        }
-
-        // 截取最近 limit 根并补涨跌幅
-        if (points.Count > limit) points = points.Skip(points.Count - limit).ToList();
-        for (var i = 1; i < points.Count; i++)
-        {
-            var prev = points[i - 1].Close;
-            if (prev != 0)
-                points[i] = points[i] with { ChangePct = Math.Round((points[i].Close / prev - 1) * 100, 2) };
-        }
-
-        return Ok(new KLineResponse(code, meta.Name, "Index", period, points));
-    }
-
     /// <summary>
     /// 指数日内分时走势（东财实时 trends2，按指数缓存 1 分钟）。
     /// PrevClose 取 IndexDaily 上一交易日收盘价，作为分时图昨收基准线与断轴判断依据；

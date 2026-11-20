@@ -25,18 +25,9 @@ import type {
   WebhookType,
 } from '../types/analysis'
 
-declare global {
-  interface Window {
-    __APP_CONFIG__?: { apiBase?: string; analysisApiBase?: string }
-  }
-}
-
 // 量化分析接口（已并入 FundAnalysis .NET 后端）：
-// - 默认走同源 /analysis-api，由 vite / nginx 代理到后端 /api
-// - 运行时可用 config.js 的 analysisApiBase 直连服务地址
-const ANALYSIS_API_BASE = window.__APP_CONFIG__?.analysisApiBase
-  ? `${window.__APP_CONFIG__.analysisApiBase.replace(/\/+$/, '')}/api`
-  : '/analysis-api'
+// 与业务接口共用 /api 前缀与 apiBase 配置，分析模块统一挂在 /api/analysis 下
+const ANALYSIS_API_BASE = `${(window.__APP_CONFIG__?.apiBase ?? '').replace(/\/+$/, '')}/api/analysis`
 
 const analysisHttp = axios.create({ baseURL: ANALYSIS_API_BASE, timeout: 120000 })
 
@@ -97,8 +88,13 @@ export async function fetchIndexKline(
   start: string,
   end: string,
   period: KlinePeriod = 'daily',
+  limit?: number,
 ): Promise<KlineData[]> {
-  const { data } = await analysisHttp.get(`/market/indexes/${code}/kline`, { params: { start, end, period } })
+  const params: Record<string, string | number> = { period }
+  if (start) params.start = start
+  if (end) params.end = end
+  if (limit) params.limit = limit
+  const { data } = await analysisHttp.get(`/market/indexes/${code}/kline`, { params })
   return data.data
 }
 

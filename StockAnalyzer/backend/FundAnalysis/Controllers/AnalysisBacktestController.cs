@@ -5,7 +5,7 @@ namespace FundAnalysis.Controllers;
 
 /// <summary>量化分析：策略回测执行与历史结果（对齐 /api/backtesting）。</summary>
 [ApiController]
-[Route("api/backtesting")]
+[Route("api/analysis/backtesting")]
 public sealed class AnalysisBacktestController(BacktestService backtest) : ControllerBase
 {
     [HttpPost("run")]

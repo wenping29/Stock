@@ -5,7 +5,7 @@ namespace FundAnalysis.Controllers;
 
 /// <summary>量化分析：监控任务与 webhook 测试（对齐 /api/monitoring）。</summary>
 [ApiController]
-[Route("api/monitoring")]
+[Route("api/analysis/monitoring")]
 public sealed class AnalysisMonitoringController(MonitoringService monitoring) : ControllerBase
 {
     public sealed class TestWebhookRequest

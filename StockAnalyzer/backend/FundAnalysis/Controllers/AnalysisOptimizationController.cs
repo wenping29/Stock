@@ -5,7 +5,7 @@ namespace FundAnalysis.Controllers;
 
 /// <summary>量化分析：参数网格搜索与滚动窗口验证（对齐 /api/optimization）。</summary>
 [ApiController]
-[Route("api/optimization")]
+[Route("api/analysis/optimization")]
 public sealed class AnalysisOptimizationController(AnalysisDataService data) : ControllerBase
 {
     [HttpPost("grid-search")]
@@ -87,6 +87,6 @@ public sealed class AnalysisOptimizationController(AnalysisDataService data) : C
 
     private Task<List<AnalysisKline>> LoadAsync(string code, string? start, string? end, string? period, CancellationToken ct)
         => AnalysisDataService.IsIndexCode(code)
-            ? data.GetIndexKlineAsync(code, start, end, period, ct)
+            ? data.GetIndexKlineAsync(code, start, end, period, ct: ct)
             : data.GetKlineAsync(code, start, end, period, ct);
 }

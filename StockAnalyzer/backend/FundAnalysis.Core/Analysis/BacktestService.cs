@@ -14,7 +14,7 @@ public sealed class BacktestService(AppDbContext db, AnalysisDataService data)
             throw new AnalysisRequestException("缺少必要参数: code, startDate, endDate, entryRules");
 
         var kline = AnalysisDataService.IsIndexCode(config.Code)
-            ? await data.GetIndexKlineAsync(config.Code, config.StartDate, config.EndDate, config.Period, ct)
+            ? await data.GetIndexKlineAsync(config.Code, config.StartDate, config.EndDate, config.Period, ct: ct)
             : await data.GetKlineAsync(config.Code, config.StartDate, config.EndDate, config.Period, ct);
 
         if (kline.Count < 60)

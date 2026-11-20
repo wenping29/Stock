@@ -128,7 +128,7 @@ npm run dev
 | POST | /api/auth/register · /api/auth/login | 注册 / 登录 | 匿名 |
 | GET | /api/quote/search?keyword= | 标的搜索 | 匿名 |
 | GET | /api/quote/kline?symbol=&period=&limit= | 多周期 K 线 | 登录（hour 需 VIP） |
-| GET | /api/quote/index-kline?code=&period=&limit= | 指数 K 线（day/week/month） | 登录 |
+| GET | /api/analysis/market/indexes/{code}/kline?period=&start=&end=&limit= | 指数 K 线（日/周/月/季/年/60min，指数页与大盘页共用） | 匿名 |
 | GET | /api/quote/index-trend?code= | 指数日内分时走势（东财实时，1 分钟缓存） | 登录 |
 | GET | /api/quote/performance?symbol= | 收益统计 | 登录 |
 | GET | /api/quote/moneyflow?symbol=&days= | 资金流明细 | VIP |
