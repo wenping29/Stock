@@ -69,6 +69,14 @@ export async function fetchUsRateHistory(
   return data.data
 }
 
+export async function fetchUsdRateHistory(
+  start?: string,
+  end?: string,
+): Promise<{ date: string; rate: number }[]> {
+  const { data } = await analysisHttp.get('/market/usd-rate', { params: { start, end } })
+  return data.data
+}
+
 export async function fetchCnRateHistory(
   type: string,
   start?: string,

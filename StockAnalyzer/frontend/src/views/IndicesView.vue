@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import type { IndexItem, IndexTrendData, KLinePoint } from '../types'
 import { fetchIndices, fetchIndexTrend } from '../api/quote'
-import { fetchIndexKline, fetchUsRateHistory, computeIndicators } from '../api/analysis'
+import { fetchIndexKline, fetchUsdRateHistory, fetchUsRateHistory, computeIndicators } from '../api/analysis'
 import type { IndicatorResult, KlineData, KlinePeriod } from '../types/analysis'
 import type { CollectCategory } from '../api/collect'
 import RefreshButton from '../components/RefreshButton.vue'
@@ -75,6 +75,7 @@ const trendLoading = ref(false)
 const quotePeriod = ref<PeriodKey>('day')
 const klineData = ref<KlineData[]>([])
 const usRate = ref<{ date: string; rate: number }[]>([])
+const usdRate = ref<{ date: string; rate: number }[]>([])
 const rateMaturity = ref('10Y')
 const dateRange = ref((() => {
   const end = new Date()
@@ -115,6 +116,10 @@ function pickQuotePeriod(p: PeriodKey) {
 
 async function loadUsRate() {
   try { usRate.value = await fetchUsRateHistory(rateMaturity.value) } catch { /* 忽略 */ }
+}
+
+async function loadUsdRate() {
+  try { usdRate.value = await fetchUsdRateHistory() } catch { /* 忽略 */ }
 }
 
 // ---- 行情K线技术指标按钮：成交量 / MA / BOLL / MACD / RSI ----
@@ -299,6 +304,7 @@ async function onCollected() {
 onMounted(() => {
   load()
   loadUsRate()
+  loadUsdRate()
 })
 </script>
 
@@ -343,7 +349,7 @@ onMounted(() => {
             {{ PERIOD_LABELS[p] }}
           </span>
         </div>
-        <span class="chart-title">预设 1月/3月/6月/1年/全部 · 自定义起止日期 · K线 / 折线切换 · 美债叠加（图表右上角可全屏）</span>
+        <span class="chart-title">预设 1月/3月/6月/1年/全部 · 自定义起止日期 · K线 / 折线切换 · 美债/美元利率叠加（图表右上角可全屏）</span>
       </div>
 
       <!-- K 线类 Tab 的周期切换 -->
@@ -377,6 +383,7 @@ onMounted(() => {
           :kline-data="klineData" :indicators="overlayInds"
           :show-volume="activeInds.has('VOL')"
           :us-rate-data="usRate" :us-rate-label="rateMaturity"
+          :usd-rate-data="usdRate"
           @range-change="onQuoteRangeChange">
           <template #toolbar>
             <span v-for="b in IND_BUTTONS" :key="b.key"

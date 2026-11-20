@@ -1,3 +1,4 @@
+using System.Globalization;
 using FundAnalysis.Data;
 using FundAnalysis.Models;
 using FundAnalysis.Services.Providers;
@@ -7,7 +8,9 @@ using Microsoft.EntityFrameworkCore;
 namespace FundAnalysis.Services;
 
 /// <summary>从数据源拉取行情并幂等入库。所有方法可重复执行，已存在的数据跳过、当日数据更新。</summary>
-public class CollectorService(AppDbContext db, IQuoteProvider provider, IConfiguration config, ILogger<CollectorService> logger)
+public class CollectorService(
+    AppDbContext db, IQuoteProvider provider, IHttpClientFactory factory,
+    IConfiguration config, ILogger<CollectorService> logger)
 {
     private const int DailyBars = 500;      // 约两年日线
     private const int MoneyFlowDays = 120;  // 约半年资金流
@@ -372,6 +375,16 @@ public class CollectorService(AppDbContext db, IQuoteProvider provider, IConfigu
             }
         }
 
+        // 美元利率：SOFR（东财无该指标，改读 FRED 公共 CSV；失败只告警）
+        try
+        {
+            await SyncUsdRateAsync();
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "美元利率（SOFR）同步失败（上游不可达？）");
+        }
+
         // 在岸中间价（push2 实时单点，本机可达）
         try
         {
@@ -474,6 +487,32 @@ public class CollectorService(AppDbContext db, IQuoteProvider provider, IConfigu
         }
         if (added > 0) await db.SaveChangesAsync();
         logger.LogInformation("行情序列 {Key} 日线新增 {Count} 条", key, added);
+    }
+
+    /// <summary>美元利率（SOFR）：FRED 公共 CSV，全量拉取后仅补缺失日期。</summary>
+    private async Task SyncUsdRateAsync()
+    {
+        var client = factory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(20);
+        var csv = await client.GetStringAsync("https://fred.stlouisfed.org/graph/fredgraph.csv?id=SOFR");
+        var rows = ParseFredCsv(csv);
+        await UpsertIndicatorSeriesAsync("SOFR", rows.Select(r => (r.Date, r.Value, (double?)null)));
+        logger.LogInformation("美元利率 SOFR 入库 {Count} 条", rows.Count);
+    }
+
+    /// <summary>解析 FRED fredgraph.csv（date,value；缺值行为空或 "."）。</summary>
+    internal static List<(DateTime Date, double Value)> ParseFredCsv(string csv)
+    {
+        var rows = new List<(DateTime, double)>();
+        foreach (var raw in csv.Split('\n'))
+        {
+            var parts = raw.Trim().Split(',');
+            if (parts.Length != 2) continue;
+            if (!DateTime.TryParseExact(parts[0], "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)) continue;
+            if (!double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var value)) continue;
+            rows.Add((date, value));
+        }
+        return rows;
     }
 
     private async Task UpsertIndicatorSeriesAsync(string symbol, IEnumerable<(DateTime Date, double Value, double? ChangePct)> rows)

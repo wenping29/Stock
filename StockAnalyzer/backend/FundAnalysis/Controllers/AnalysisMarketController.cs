@@ -45,6 +45,11 @@ public sealed class AnalysisMarketController(MarketAnalysisService market) : Con
         return Ok(new { success = true, data = await market.GetUsRatesAsync(maturity, start, end, ct) });
     }
 
+    [HttpGet("usd-rate")]
+    public async Task<IActionResult> UsdRate(
+        [FromQuery] string? start, [FromQuery] string? end, CancellationToken ct)
+        => Ok(new { success = true, data = await market.GetUsdRateAsync(start, end, ct) });
+
     [HttpGet("cn-rates/{type}")]
     public async Task<IActionResult> CnRates(
         string type, [FromQuery] string? start, [FromQuery] string? end, CancellationToken ct)

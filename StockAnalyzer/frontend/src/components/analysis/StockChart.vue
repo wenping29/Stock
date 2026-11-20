@@ -10,12 +10,15 @@ const props = withDefaults(defineProps<{
   indicators: IndicatorResult[]
   usRateData?: { date: string; rate: number }[]
   usRateLabel?: string
+  /** 美元利率（SOFR）叠加 */
+  usdRateData?: { date: string; rate: number }[]
   /** 主图下方叠加成交量柱状副图 */
   showVolume?: boolean
   height?: number
 }>(), {
   usRateData: () => [],
   usRateLabel: '',
+  usdRateData: () => [],
   showVolume: false,
   height: 460,
 })
@@ -56,6 +59,7 @@ function fmtDate(ms: number): string {
 const el = ref<HTMLElement>()
 const chartType = ref<'candlestick' | 'line'>('candlestick')
 const showUsRate = ref(false)
+const showUsdRate = ref(false)
 const dateStart = ref('')
 const dateEnd = ref('')
 
@@ -121,6 +125,20 @@ function setPreset(months: number | 'all') {
 }
 
 const hasUsRate = computed(() => props.usRateData.length > 0)
+const hasUsdRate = computed(() => props.usdRateData.length > 0)
+
+/** 利率序列按 K 线日期对齐（取不晚于该日的最近一个值）。 */
+function alignRate(kline: KlineData[], series: { date: string; rate: number }[]): (number | null)[] {
+  const sorted = [...series].sort((a, b) => a.date.localeCompare(b.date))
+  const aligned: (number | null)[] = []
+  let idx = 0
+  for (const k of kline) {
+    const kd = toIsoDate(k.date)
+    while (idx < sorted.length - 1 && sorted[idx + 1].date <= kd) idx++
+    aligned.push(sorted[idx] && sorted[idx].date <= kd ? sorted[idx].rate : null)
+  }
+  return aligned
+}
 
 const option = computed<EChartsOption | null>(() => {
   const kline = filtered.value.kline
@@ -214,28 +232,36 @@ const option = computed<EChartsOption | null>(() => {
     }
   }
 
-  const hasRateAxis = showUsRate.value && hasUsRate.value
+  const showTreasury = showUsRate.value && hasUsRate.value
+  const showUsd = showUsdRate.value && hasUsdRate.value
+  const hasRateAxis = showTreasury || showUsd
 
-  if (hasRateAxis) {
-    const sorted = [...props.usRateData].sort((a, b) => a.date.localeCompare(b.date))
-    const aligned: (number | null)[] = []
-    let idx = 0
-    for (const k of kline) {
-      const kd = toIsoDate(k.date)
-      while (idx < sorted.length - 1 && sorted[idx + 1].date <= kd) idx++
-      aligned.push(sorted[idx].date <= kd ? sorted[idx].rate : null)
-    }
+  if (showTreasury) {
     series.push({
       name: `美债${props.usRateLabel}`,
       type: 'line',
       yAxisIndex: 1,
-      data: aligned,
+      data: alignRate(kline, props.usRateData),
       showSymbol: false,
       connectNulls: true,
       lineStyle: { width: 1.4, type: 'dashed', color: '#409eff' },
       itemStyle: { color: '#409eff' },
     })
     legendData.push(`美债${props.usRateLabel}`)
+  }
+
+  if (showUsd) {
+    series.push({
+      name: '美元利率',
+      type: 'line',
+      yAxisIndex: 1,
+      data: alignRate(kline, props.usdRateData),
+      showSymbol: false,
+      connectNulls: true,
+      lineStyle: { width: 1.4, type: 'dashed', color: '#00897b' },
+      itemStyle: { color: '#00897b' },
+    })
+    legendData.push('美元利率')
   }
 
   if (props.showVolume) {
@@ -308,9 +334,9 @@ const option = computed<EChartsOption | null>(() => {
         ? [{
             type: 'value' as const,
             scale: true,
-            name: '美债利率 %',
-            nameTextStyle: { fontSize: 10, color: '#409eff' },
-            axisLabel: { fontSize: 10, color: '#409eff' },
+            name: showTreasury && showUsd ? '利率 %' : showTreasury ? '美债利率 %' : '美元利率 %',
+            nameTextStyle: { fontSize: 10, color: showTreasury ? '#409eff' : '#00897b' },
+            axisLabel: { fontSize: 10, color: showTreasury ? '#409eff' : '#00897b' },
             splitLine: { show: false },
           }]
         : []),
@@ -331,7 +357,7 @@ const option = computed<EChartsOption | null>(() => {
   }
 })
 
-useEChart(el, () => option.value, () => [filtered.value, chartType.value, showUsRate.value, props.showVolume])
+useEChart(el, () => option.value, () => [filtered.value, chartType.value, showUsRate.value, showUsdRate.value, props.showVolume])
 
 const presets: { label: string; val: number | 'all' }[] = [
   { label: '1月', val: 1 },
@@ -361,7 +387,13 @@ const presets: { label: string; val: number | 'all' }[] = [
         :class="{ active: showUsRate }"
         @click="showUsRate = !showUsRate"
       >美债{{ usRateLabel }}</button>
-      <!-- 附加工具（如技术指标开关），排在美债按钮之后 -->
+      <button
+        v-if="hasUsdRate"
+        class="us-toggle"
+        :class="{ active: showUsdRate }"
+        @click="showUsdRate = !showUsdRate"
+      >美元利率</button>
+      <!-- 附加工具（如技术指标开关），排在美债/美元利率按钮之后 -->
       <slot name="toolbar" />
     </div>
     <div

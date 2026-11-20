@@ -19,6 +19,7 @@ import {
   fetchIndexKline,
   fetchIndexPeriodData,
   fetchMacroIndicators,
+  fetchUsdRateHistory,
   fetchUsRateHistory,
 } from '../../api/analysis'
 import { fetchIndices, fetchIndexTrend } from '../../api/quote'
@@ -39,6 +40,7 @@ const error = ref('')
 
 const macro = ref<MacroIndicator[]>([])
 const usRate = ref<{ date: string; rate: number }[]>([])
+const usdRate = ref<{ date: string; rate: number }[]>([])
 const rateMaturity = ref('10Y')
 const cnRate = ref<{ date: string; rate: number }[]>([])
 const cnRateType = ref('SHIBOR_3M')
@@ -328,6 +330,9 @@ async function loadMacro() {
 async function loadUsRate() {
   try { usRate.value = await fetchUsRateHistory(rateMaturity.value) } catch { /* 忽略 */ }
 }
+async function loadUsdRate() {
+  try { usdRate.value = await fetchUsdRateHistory() } catch { /* 忽略 */ }
+}
 async function loadCnRate() {
   try { cnRate.value = await fetchCnRateHistory(cnRateType.value) } catch { /* 忽略 */ }
 }
@@ -352,6 +357,7 @@ function reloadAll() {
   loadIndexes()
   loadMacro()
   loadUsRate()
+  loadUsdRate()
   loadCnRate()
   loadUnified()
   loadFx()
@@ -363,6 +369,7 @@ onMounted(() => {
   loadIndexes()
   loadMacro()
   loadUsRate()
+  loadUsdRate()
   loadCnRate()
   loadUnified()
   loadFx()
@@ -525,6 +532,7 @@ const goldChart = computed(() => ({
             :show-volume="activeInds.has('VOL')"
             :us-rate-data="usRate"
             :us-rate-label="rateMaturity"
+            :usd-rate-data="usdRate"
             @range-change="onKlineRangeChange"
           >
             <template #toolbar>

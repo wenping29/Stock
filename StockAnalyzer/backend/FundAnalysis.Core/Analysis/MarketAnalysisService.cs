@@ -118,8 +118,15 @@ public sealed class MarketAnalysisService(AppDbContext db, AnalysisDataService d
 
     public async Task<List<object>> GetUsRatesAsync(
         string maturity, string? start, string? end, CancellationToken ct = default)
+        => await GetRateSeriesAsync("US" + maturity.ToUpperInvariant(), start, end, ct);
+
+    /// <summary>美元利率（SOFR，采集器从 FRED 拉取后入库 MarketIndicator）。</summary>
+    public async Task<List<object>> GetUsdRateAsync(string? start, string? end, CancellationToken ct = default)
+        => await GetRateSeriesAsync("SOFR", start, end, ct);
+
+    private async Task<List<object>> GetRateSeriesAsync(
+        string symbol, string? start, string? end, CancellationToken ct)
     {
-        var symbol = "US" + maturity.ToUpperInvariant();
         var query = db.MarketIndicators.AsNoTracking().Where(x => x.Symbol == symbol);
         if (AnalysisDataService.ParseDate(start, DateTime.MinValue) is var s && s > DateTime.MinValue)
             query = query.Where(x => x.Date >= s);
