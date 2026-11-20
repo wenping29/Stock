@@ -10,10 +10,13 @@ const props = withDefaults(defineProps<{
   indicators: IndicatorResult[]
   usRateData?: { date: string; rate: number }[]
   usRateLabel?: string
+  /** 主图下方叠加成交量柱状副图 */
+  showVolume?: boolean
   height?: number
 }>(), {
   usRateData: () => [],
   usRateLabel: '',
+  showVolume: false,
   height: 460,
 })
 
@@ -211,7 +214,9 @@ const option = computed<EChartsOption | null>(() => {
     }
   }
 
-  if (showUsRate.value && hasUsRate.value) {
+  const hasRateAxis = showUsRate.value && hasUsRate.value
+
+  if (hasRateAxis) {
     const sorted = [...props.usRateData].sort((a, b) => a.date.localeCompare(b.date))
     const aligned: (number | null)[] = []
     let idx = 0
@@ -233,6 +238,21 @@ const option = computed<EChartsOption | null>(() => {
     legendData.push(`美债${props.usRateLabel}`)
   }
 
+  if (props.showVolume) {
+    series.push({
+      name: '成交量',
+      type: 'bar',
+      xAxisIndex: 1,
+      yAxisIndex: hasRateAxis ? 2 : 1,
+      data: kline.map((d, i) => ({
+        value: d.volume,
+        itemStyle: { color: d.close >= (kline[i - 1]?.close ?? d.open) ? UP_COLOR : DOWN_COLOR },
+      })),
+    })
+  }
+
+  const right = hasRateAxis ? 64 : 24
+
   return {
     animation: false,
     tooltip: { ...baseTooltip, axisPointer: { type: 'cross' } },
@@ -245,14 +265,38 @@ const option = computed<EChartsOption | null>(() => {
       textStyle: { fontSize: 11, color: '#606266' },
       data: legendData,
     },
-    grid: { left: 64, right: showUsRate.value ? 64 : 24, top: 36, bottom: 64 },
-    xAxis: {
-      type: 'category',
-      data: dates,
-      boundaryGap: true,
-      axisLine: { lineStyle: { color: '#c0c4cc' } },
-      axisLabel: { fontSize: 10, color: '#909399' },
-    },
+    grid: props.showVolume
+      ? [
+          { left: 64, right, top: 36, height: '55%' },
+          { left: 64, right, top: '66%', height: '13%' },
+        ]
+      : { left: 64, right, top: 36, bottom: 64 },
+    xAxis: props.showVolume
+      ? [
+          {
+            type: 'category',
+            data: dates,
+            boundaryGap: true,
+            axisLine: { lineStyle: { color: '#c0c4cc' } },
+            axisLabel: { fontSize: 10, color: '#909399' },
+          },
+          {
+            type: 'category',
+            gridIndex: 1,
+            data: dates,
+            boundaryGap: true,
+            axisLabel: { show: false },
+            axisTick: { show: false },
+            axisLine: { lineStyle: { color: '#e4e7ed' } },
+          },
+        ]
+      : {
+          type: 'category',
+          data: dates,
+          boundaryGap: true,
+          axisLine: { lineStyle: { color: '#c0c4cc' } },
+          axisLabel: { fontSize: 10, color: '#909399' },
+        },
     yAxis: [
       {
         type: 'value',
@@ -260,7 +304,7 @@ const option = computed<EChartsOption | null>(() => {
         axisLabel: { fontSize: 10, color: '#909399' },
         splitLine: { lineStyle: { color: '#f0f0f0' } },
       },
-      ...(showUsRate.value && hasUsRate.value
+      ...(hasRateAxis
         ? [{
             type: 'value' as const,
             scale: true,
@@ -270,16 +314,24 @@ const option = computed<EChartsOption | null>(() => {
             splitLine: { show: false },
           }]
         : []),
+      ...(props.showVolume
+        ? [{
+            type: 'value' as const,
+            gridIndex: 1,
+            axisLabel: { show: false },
+            splitLine: { show: false },
+          }]
+        : []),
     ],
     dataZoom: [
-      { type: 'inside', start: 0, end: 100 },
-      { type: 'slider', bottom: 10, height: 20, start: 0, end: 100 },
+      { type: 'inside', xAxisIndex: props.showVolume ? [0, 1] : [0], start: 0, end: 100 },
+      { type: 'slider', xAxisIndex: props.showVolume ? [0, 1] : [0], bottom: 10, height: 20, start: 0, end: 100 },
     ],
     series,
   }
 })
 
-useEChart(el, () => option.value, () => [filtered.value, chartType.value, showUsRate.value])
+useEChart(el, () => option.value, () => [filtered.value, chartType.value, showUsRate.value, props.showVolume])
 
 const presets: { label: string; val: number | 'all' }[] = [
   { label: '1月', val: 1 },

@@ -3,12 +3,13 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import type { IndexItem, IndexTrendData, KLinePoint } from '../types'
 import { fetchIndices, fetchIndexTrend } from '../api/quote'
-import { fetchIndexKline, fetchUsRateHistory } from '../api/analysis'
-import type { KlineData, KlinePeriod } from '../types/analysis'
+import { fetchIndexKline, fetchUsRateHistory, computeIndicators } from '../api/analysis'
+import type { IndicatorResult, KlineData, KlinePeriod } from '../types/analysis'
 import type { CollectCategory } from '../api/collect'
 import RefreshButton from '../components/RefreshButton.vue'
 import IndexGroupCard from '../components/IndexGroupCard.vue'
 import StockChart from '../components/analysis/StockChart.vue'
+import IndicatorChart from '../components/analysis/IndicatorChart.vue'
 import KLineChart from '../components/KLineChart.vue'
 import MarketMatrixChart from '../components/MarketMatrixChart.vue'
 import IntradayTrendChart from '../components/IntradayTrendChart.vue'
@@ -115,6 +116,61 @@ function pickQuotePeriod(p: PeriodKey) {
 async function loadUsRate() {
   try { usRate.value = await fetchUsRateHistory(rateMaturity.value) } catch { /* 忽略 */ }
 }
+
+// ---- 行情K线技术指标按钮：成交量 / MA / BOLL / MACD / RSI ----
+type IndKey = 'VOL' | 'MA' | 'BOLL' | 'MACD' | 'RSI'
+const IND_BUTTONS: { key: IndKey; label: string }[] = [
+  { key: 'VOL', label: '成交量' },
+  { key: 'MA', label: 'MA' },
+  { key: 'BOLL', label: 'BOLL' },
+  { key: 'MACD', label: 'MACD' },
+  { key: 'RSI', label: 'RSI' },
+]
+const activeInds = ref<Set<IndKey>>(new Set())
+const overlayInds = ref<IndicatorResult[]>([])
+const paneInds = ref<IndicatorResult[]>([])
+let indSeq = 0
+
+/** MA/BOLL 叠加在主图，MACD/RSI 在下方独立副图；成交量由 StockChart 直接绘制 */
+async function refreshIndicators() {
+  const data = klineData.value
+  const defs: { name: string; params: Record<string, number> }[] = []
+  if (data.length) {
+    if (activeInds.value.has('MA'))
+      for (const p of [5, 10, 20, 30]) defs.push({ name: 'MA', params: { period: p } })
+    if (activeInds.value.has('BOLL'))
+      defs.push({ name: 'BOLL', params: { period: 20, stddev: 2 } })
+    if (activeInds.value.has('MACD')) defs.push({ name: 'MACD', params: {} })
+    if (activeInds.value.has('RSI')) defs.push({ name: 'RSI', params: { period: 14 } })
+  }
+  if (!defs.length) {
+    indSeq++
+    overlayInds.value = []
+    paneInds.value = []
+    return
+  }
+  const seq = ++indSeq
+  try {
+    const res = await computeIndicators(data, defs)
+    if (seq !== indSeq) return
+    overlayInds.value = res.filter((r) => r.name === 'MA' || r.name === 'BOLL')
+    paneInds.value = res.filter((r) => r.name === 'MACD' || r.name === 'RSI')
+  } catch {
+    if (seq !== indSeq) return
+    overlayInds.value = []
+    paneInds.value = []
+  }
+}
+
+function toggleInd(k: IndKey) {
+  const next = new Set(activeInds.value)
+  if (next.has(k)) next.delete(k)
+  else next.add(k)
+  activeInds.value = next
+  refreshIndicators()
+}
+
+watch(klineData, () => { if (activeInds.value.size) refreshIndicators() })
 
 // 股市矩阵排除“辅助指标”（深证综指，仅用于两市成交量统计）
 const matrixItems = computed(() => items.value.filter((i) => i.group !== '辅助指标'))
@@ -289,6 +345,12 @@ onMounted(() => {
         </div>
         <span class="chart-title">预设 1月/3月/6月/1年/全部 · 自定义起止日期 · K线 / 折线切换 · 美债叠加（图表右上角可全屏）</span>
       </div>
+      <div class="ind-tabs" v-if="tab === 'quote'">
+        <span v-for="b in IND_BUTTONS" :key="b.key"
+          class="ind-chip" :class="{ active: activeInds.has(b.key) }" @click="toggleInd(b.key)">
+          {{ b.label }}
+        </span>
+      </div>
 
       <!-- K 线类 Tab 的周期切换 -->
       <div class="chart-toolbar" v-else-if="tab === 'kline' || tab === 'bigkline'">
@@ -318,9 +380,15 @@ onMounted(() => {
       <div v-loading="tab === 'intraday' ? trendLoading : klineLoading">
         <StockChart
           v-if="tab === 'quote' && klineData.length"
-          :kline-data="klineData" :indicators="[]"
+          :kline-data="klineData" :indicators="overlayInds"
+          :show-volume="activeInds.has('VOL')"
           :us-rate-data="usRate" :us-rate-label="rateMaturity"
           @range-change="onQuoteRangeChange" />
+        <template v-if="tab === 'quote'">
+          <IndicatorChart
+            v-for="ind in paneInds" :key="ind.name"
+            :kline-data="klineData" :indicator="ind" />
+        </template>
         <KLineChart
           v-if="tab === 'kline' && points.length"
           :key="`kline-${selected.code}-${period}`"
@@ -374,6 +442,15 @@ onMounted(() => {
 
 .chart-toolbar { display: flex; align-items: center; gap: 16px; margin-bottom: 10px; flex-wrap: wrap; }
 .chart-title { color: #606266; font-size: 13px; }
+
+/* 技术指标开关（成交量/MA/BOLL/MACD/RSI） */
+.ind-tabs { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+.ind-chip {
+  padding: 3px 12px; font-size: 12px; color: #606266; background: #f5f7fa;
+  border: 1px solid #dcdfe6; border-radius: 4px; cursor: pointer; user-select: none;
+}
+.ind-chip:hover { color: #409eff; border-color: #a0cfff; }
+.ind-chip.active { background: #409eff; border-color: #409eff; color: #fff; }
 .period-tabs { display: flex; border: 1px solid #dcdfe6; border-radius: 6px; overflow: hidden; }
 .period-item { padding: 4px 16px; cursor: pointer; font-size: 13px; color: #606266; background: #fff; user-select: none; }
 .period-item + .period-item { border-left: 1px solid #dcdfe6; }

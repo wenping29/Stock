@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import type {
+  IndicatorResult,
   KlineData,
   KlinePeriod,
   MacroIndicator,
@@ -9,6 +10,7 @@ import type {
 import type { IndexItem, IndexTrendData, KLinePoint } from '../../types'
 import {
   analysisErrorMessage,
+  computeIndicators,
   fetchCn10y,
   fetchCnRateHistory,
   fetchCrudeOil,
@@ -21,6 +23,7 @@ import {
 } from '../../api/analysis'
 import { fetchIndices, fetchIndexTrend } from '../../api/quote'
 import StockChart from '../../components/analysis/StockChart.vue'
+import IndicatorChart from '../../components/analysis/IndicatorChart.vue'
 import AnalysisLineChart from '../../components/analysis/AnalysisLineChart.vue'
 import KLineChart from '../../components/KLineChart.vue'
 import MarketMatrixChart from '../../components/MarketMatrixChart.vue'
@@ -140,6 +143,61 @@ function onKlineRangeChange(range: { start: string; end: string; months: number 
     : { start: range.start, end: range.end }
   loadKline()
 }
+
+// ---- 行情K线技术指标按钮：成交量 / MA / BOLL / MACD / RSI ----
+type IndKey = 'VOL' | 'MA' | 'BOLL' | 'MACD' | 'RSI'
+const IND_BUTTONS: { key: IndKey; label: string }[] = [
+  { key: 'VOL', label: '成交量' },
+  { key: 'MA', label: 'MA' },
+  { key: 'BOLL', label: 'BOLL' },
+  { key: 'MACD', label: 'MACD' },
+  { key: 'RSI', label: 'RSI' },
+]
+const activeInds = ref<Set<IndKey>>(new Set())
+const overlayInds = ref<IndicatorResult[]>([])
+const paneInds = ref<IndicatorResult[]>([])
+let indSeq = 0
+
+/** MA/BOLL 叠加在主图，MACD/RSI 在下方独立副图；成交量由 StockChart 直接绘制 */
+async function refreshIndicators() {
+  const data = klineData.value
+  const defs: { name: string; params: Record<string, number> }[] = []
+  if (data.length) {
+    if (activeInds.value.has('MA'))
+      for (const p of [5, 10, 20, 30]) defs.push({ name: 'MA', params: { period: p } })
+    if (activeInds.value.has('BOLL'))
+      defs.push({ name: 'BOLL', params: { period: 20, stddev: 2 } })
+    if (activeInds.value.has('MACD')) defs.push({ name: 'MACD', params: {} })
+    if (activeInds.value.has('RSI')) defs.push({ name: 'RSI', params: { period: 14 } })
+  }
+  if (!defs.length) {
+    indSeq++
+    overlayInds.value = []
+    paneInds.value = []
+    return
+  }
+  const seq = ++indSeq
+  try {
+    const res = await computeIndicators(data, defs)
+    if (seq !== indSeq) return
+    overlayInds.value = res.filter((r) => r.name === 'MA' || r.name === 'BOLL')
+    paneInds.value = res.filter((r) => r.name === 'MACD' || r.name === 'RSI')
+  } catch {
+    if (seq !== indSeq) return
+    overlayInds.value = []
+    paneInds.value = []
+  }
+}
+
+function toggleInd(k: IndKey) {
+  const next = new Set(activeInds.value)
+  if (next.has(k)) next.delete(k)
+  else next.add(k)
+  activeInds.value = next
+  refreshIndicators()
+}
+
+watch(klineData, () => { if (activeInds.value.size) refreshIndicators() })
 
 // ---- 图表 Tab：行情K线（StockChart）/ 日K均线 / 大数据K线 / 股市矩阵 / 日内走势 ----
 type ChartTab = 'quote' | 'kline' | 'bigkline' | 'matrix' | 'intraday'
@@ -438,6 +496,14 @@ const goldChart = computed(() => ({
           >{{ t.label }}</span>
         </div>
 
+        <div class="ind-tabs" v-if="chartTab === 'quote'">
+          <span
+            v-for="b in IND_BUTTONS" :key="b.key"
+            class="ind-chip" :class="{ active: activeInds.has(b.key) }"
+            @click="toggleInd(b.key)"
+          >{{ b.label }}</span>
+        </div>
+
         <div class="chart-toolbar" v-if="chartTab !== 'quote'">
           <div class="period-tabs" v-if="chartTab === 'kline' || chartTab === 'bigkline'">
             <span
@@ -463,11 +529,17 @@ const goldChart = computed(() => ({
           <StockChart
             v-if="chartTab === 'quote' && klineData.length"
             :kline-data="klineData"
-            :indicators="[]"
+            :indicators="overlayInds"
+            :show-volume="activeInds.has('VOL')"
             :us-rate-data="usRate"
             :us-rate-label="rateMaturity"
             @range-change="onKlineRangeChange"
           />
+          <template v-if="chartTab === 'quote'">
+            <IndicatorChart
+              v-for="ind in paneInds" :key="ind.name"
+              :kline-data="klineData" :indicator="ind" />
+          </template>
           <KLineChart
             v-if="chartTab === 'kline' && maPoints.length"
             :key="`ma-${selected.code}-${maPeriod}`"
@@ -615,6 +687,15 @@ const goldChart = computed(() => ({
 .chart-tab.active { color: #409eff; border-bottom-color: #409eff; font-weight: 600; }
 
 .chart-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+
+/* 技术指标开关（成交量/MA/BOLL/MACD/RSI） */
+.ind-tabs { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+.ind-chip {
+  padding: 3px 12px; font-size: 12px; color: #606266; background: #f5f7fa;
+  border: 1px solid #dcdfe6; border-radius: 4px; cursor: pointer; user-select: none;
+}
+.ind-chip:hover { color: #409eff; border-color: #a0cfff; }
+.ind-chip.active { background: #409eff; border-color: #409eff; color: #fff; }
 .chart-title { color: #606266; font-size: 12px; }
 .period-tabs { display: flex; border: 1px solid #dcdfe6; border-radius: 6px; overflow: hidden; }
 .period-item { padding: 3px 14px; cursor: pointer; font-size: 12px; color: #606266; background: #fff; user-select: none; }

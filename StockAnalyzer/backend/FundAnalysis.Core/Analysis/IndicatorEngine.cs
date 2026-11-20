@@ -117,16 +117,25 @@ public static class IndicatorEngine
     {
         var result = new double[values.Count];
         if (values.Count == 0) return result;
-        var seedCount = Math.Min(period, values.Count);
+        // 跳过前导 NaN（如 MACD 对 DIF 再求 EMA，DIF 前段为空），否则种子被 NaN 污染
+        var start = 0;
+        while (start < values.Count && double.IsNaN(values[start])) start++;
+        if (start >= values.Count)
+        {
+            Array.Fill(result, double.NaN);
+            return result;
+        }
+        var seedCount = Math.Min(period, values.Count - start);
         var seed = 0.0;
-        for (var i = 0; i < seedCount; i++) seed += values[i];
+        for (var i = start; i < start + seedCount; i++) seed += values[i];
         seed /= period;
         var alpha = 2.0 / (period + 1);
         var prev = seed;
-        for (var i = 0; i < values.Count; i++)
+        for (var i = 0; i < start; i++) result[i] = double.NaN;
+        for (var i = start; i < values.Count; i++)
         {
-            if (i < period - 1) result[i] = double.NaN;
-            else if (i == period - 1) result[i] = prev;
+            if (i < start + period - 1) result[i] = double.NaN;
+            else if (i == start + period - 1) result[i] = prev;
             else
             {
                 prev = alpha * values[i] + (1 - alpha) * prev;
