@@ -3,11 +3,12 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import type { IndexItem, IndexTrendData, KLinePoint } from '../types'
 import { fetchIndices, fetchIndexTrend } from '../api/quote'
-import { fetchIndexKline } from '../api/analysis'
+import { fetchIndexKline, fetchUsRateHistory } from '../api/analysis'
 import type { KlineData, KlinePeriod } from '../types/analysis'
 import type { CollectCategory } from '../api/collect'
 import RefreshButton from '../components/RefreshButton.vue'
 import IndexGroupCard from '../components/IndexGroupCard.vue'
+import StockChart from '../components/analysis/StockChart.vue'
 import KLineChart from '../components/KLineChart.vue'
 import MarketMatrixChart from '../components/MarketMatrixChart.vue'
 import IntradayTrendChart from '../components/IntradayTrendChart.vue'
@@ -52,21 +53,68 @@ function toKlinePoints(rows: KlineData[]): KLinePoint[] {
   }))
 }
 
-// 详情区 Tab：日K均线 / 大数据K线 / 股市矩阵 / 日内走势
-type TabKey = 'kline' | 'bigkline' | 'matrix' | 'intraday'
+// 详情区 Tab：行情K线 / 日K均线 / 大数据K线 / 股市矩阵 / 日内走势
+type TabKey = 'quote' | 'kline' | 'bigkline' | 'matrix' | 'intraday'
 const tabs: { key: TabKey; label: string }[] = [
+  { key: 'quote', label: '行情K线' },
   { key: 'kline', label: '日K · 均线' },
   { key: 'bigkline', label: '大数据K线' },
   { key: 'matrix', label: '股市矩阵' },
   { key: 'intraday', label: '日内走势' },
 ]
-const tab = ref<TabKey>('kline')
+const tab = ref<TabKey>('quote')
 
 const points = ref<KLinePoint[]>([])
 const bigPoints = ref<KLinePoint[]>([])
 const trend = ref<IndexTrendData | null>(null)
 const klineLoading = ref(false)
 const trendLoading = ref(false)
+
+// ---- 行情K线 Tab：区间查询（预设一年/全部、自定义日期）+ 60分/日/周/月 + 美债叠加 ----
+const quotePeriod = ref<PeriodKey>('day')
+const klineData = ref<KlineData[]>([])
+const usRate = ref<{ date: string; rate: number }[]>([])
+const rateMaturity = ref('10Y')
+const dateRange = ref((() => {
+  const end = new Date()
+  const start = new Date(end)
+  start.setFullYear(end.getFullYear() - 1)
+  return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) }
+})())
+
+let quoteSeq = 0
+async function loadQuote() {
+  if (!selected.value) return
+  const seq = ++quoteSeq
+  klineLoading.value = true
+  try {
+    const rows = await fetchIndexKline(
+      selected.value.code, dateRange.value.start, dateRange.value.end, PERIOD_MAP[quotePeriod.value])
+    if (seq !== quoteSeq) return
+    klineData.value = rows
+  } catch {
+    if (seq === quoteSeq) klineData.value = []
+  } finally {
+    if (seq === quoteSeq) klineLoading.value = false
+  }
+}
+
+function onQuoteRangeChange(range: { start: string; end: string; months: number | 'all' }) {
+  dateRange.value = range.months === 'all'
+    ? { start: '2000-01-01', end: range.end }
+    : { start: range.start, end: range.end }
+  loadQuote()
+}
+
+function pickQuotePeriod(p: PeriodKey) {
+  if (quotePeriod.value === p) return
+  quotePeriod.value = p
+  if (tab.value === 'quote') loadQuote()
+}
+
+async function loadUsRate() {
+  try { usRate.value = await fetchUsRateHistory(rateMaturity.value) } catch { /* 忽略 */ }
+}
 
 // 股市矩阵排除“辅助指标”（深证综指，仅用于两市成交量统计）
 const matrixItems = computed(() => items.value.filter((i) => i.group !== '辅助指标'))
@@ -87,6 +135,7 @@ const restGroups = computed(() => groups.value.filter((g) => g.group !== 'A股�
 
 /** 当前 Tab 是否无数据可展示 */
 const showEmpty = computed(() => {
+  if (tab.value === 'quote') return !klineData.value.length
   if (tab.value === 'kline') return !points.value.length
   if (tab.value === 'bigkline') return !bigPoints.value.length
   if (tab.value === 'matrix') return !matrixItems.value.length
@@ -128,7 +177,9 @@ function pickTab(t: TabKey) {
 /** 按当前 Tab 加载数据（股市矩阵直接用已加载的指数清单，无需请求） */
 async function loadTabData() {
   if (!selected.value) return
-  if (tab.value === 'kline' || tab.value === 'bigkline') {
+  if (tab.value === 'quote') {
+    await loadQuote()
+  } else if (tab.value === 'kline' || tab.value === 'bigkline') {
     klineLoading.value = true
     try {
       const limit = tab.value === 'bigkline' ? 500 : 120
@@ -189,7 +240,10 @@ async function onCollected() {
   }
 }
 
-onMounted(load)
+onMounted(() => {
+  load()
+  loadUsRate()
+})
 </script>
 
 <template>
@@ -207,13 +261,14 @@ onMounted(load)
         :selected-code="selected?.code" @select="select" />
     </div>
 
-    <!-- 选中指数详情：Tab 切换 日K均线 / 大数据K线 / 股市矩阵 / 日内走势 -->
+    <!-- 选中指数详情：Tab 切换 行情K线 / 日K均线 / 大数据K线 / 股市矩阵 / 日内走势 -->
     <div class="page-card" v-if="selected">
       <div class="kline-head">
         <h3>{{ selected.name }} <span class="code">{{ selected.code }}</span></h3>
         <span class="price" :class="pctClass(selected.changePct)">{{ selected.price.toFixed(2) }}</span>
         <span :class="pctClass(selected.changePct)">{{ fmtPct(selected.changePct) }}</span>
         <span v-if="selected.amount" class="amount">成交 {{ selected.amount >= 10000 ? (selected.amount / 10000).toFixed(2) + ' 万亿' : selected.amount.toFixed(0) + ' 亿' }}</span>
+        <span v-if="tab === 'quote'" class="range">{{ dateRange.start }} ~ {{ dateRange.end }}</span>
         <div style="flex: 1" />
         <RefreshButton :category="refreshCategory" label="刷新数据" @done="onCollected" />
         <div class="detail-tabs">
@@ -224,8 +279,19 @@ onMounted(load)
         </div>
       </div>
 
+      <!-- 行情K线 Tab：区间预设/自定义日期、K线·折线、美债叠加由图表工具栏提供 -->
+      <div class="chart-toolbar" v-if="tab === 'quote'">
+        <div class="period-tabs">
+          <span v-for="p in PERIOD_KEYS" :key="p"
+            class="period-item" :class="{ active: quotePeriod === p }" @click="pickQuotePeriod(p)">
+            {{ PERIOD_LABELS[p] }}
+          </span>
+        </div>
+        <span class="chart-title">预设 1月/3月/6月/1年/全部 · 自定义起止日期 · K线 / 折线切换 · 美债叠加（图表右上角可全屏）</span>
+      </div>
+
       <!-- K 线类 Tab 的周期切换 -->
-      <div class="chart-toolbar" v-if="tab === 'kline' || tab === 'bigkline'">
+      <div class="chart-toolbar" v-else-if="tab === 'kline' || tab === 'bigkline'">
         <div class="period-tabs">
           <span v-for="p in PERIOD_KEYS" :key="p"
             class="period-item" :class="{ active: period === p }" @click="pickPeriod(p)">
@@ -250,6 +316,11 @@ onMounted(load)
       </div>
 
       <div v-loading="tab === 'intraday' ? trendLoading : klineLoading">
+        <StockChart
+          v-if="tab === 'quote' && klineData.length"
+          :kline-data="klineData" :indicators="[]"
+          :us-rate-data="usRate" :us-rate-label="rateMaturity"
+          @range-change="onQuoteRangeChange" />
         <KLineChart
           v-if="tab === 'kline' && points.length"
           :key="`kline-${selected.code}-${period}`"
@@ -267,7 +338,11 @@ onMounted(load)
           :key="`trend-${selected.code}-${trend.date}`"
           :data="trend" />
         <el-empty v-if="showEmpty" :image-size="60"
-          :description="tab === 'intraday' ? '暂无分时数据（东财实时接口暂不可用或该指数不支持）' : '暂无数据'" />
+          :description="tab === 'intraday'
+            ? '暂无分时数据（东财实时接口暂不可用或该指数不支持）'
+            : tab === 'quote'
+              ? '暂无行情数据（可调整区间或点击“刷新数据”）'
+              : '暂无数据'" />
       </div>
     </div>
 
@@ -285,6 +360,7 @@ onMounted(load)
 .code { color: #909399; font-size: 13px; font-weight: normal; }
 .price { font-size: 22px; font-weight: 600; }
 .amount { color: #909399; font-size: 13px; }
+.range { color: #909399; font-size: 13px; }
 
 /* 详情 Tab（下划线风格） */
 .detail-tabs { display: flex; gap: 4px; border-bottom: 1px solid #ebeef5; }
