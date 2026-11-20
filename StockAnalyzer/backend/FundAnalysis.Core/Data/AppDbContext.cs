@@ -32,6 +32,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
     public DbSet<MarketIndicator> MarketIndicators => Set<MarketIndicator>();
     public DbSet<IndexIntraday> IndexIntradays => Set<IndexIntraday>();
     public DbSet<MarketSentimentDaily> MarketSentimentDailies => Set<MarketSentimentDaily>();
+    public DbSet<MarketSeriesPoint> MarketSeriesPoints => Set<MarketSeriesPoint>();
+    public DbSet<BacktestRecord> BacktestRecords => Set<BacktestRecord>();
+    public DbSet<BacktestTradeRecord> BacktestTradeRecords => Set<BacktestTradeRecord>();
+    public DbSet<MonitoringJob> MonitoringJobs => Set<MonitoringJob>();
+    public DbSet<MonitoringRun> MonitoringRuns => Set<MonitoringRun>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -168,6 +173,44 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
         b.Entity<MarketSentimentDaily>(e =>
         {
             e.HasIndex(x => x.Date).IsUnique();
+        });
+
+        b.Entity<MarketSeriesPoint>(e =>
+        {
+            e.HasIndex(x => new { x.Key, x.Period, x.Date }).IsUnique();
+            e.HasIndex(x => new { x.Key, x.Period });
+            e.Property(x => x.Key).HasMaxLength(32);
+            e.Property(x => x.Period).HasMaxLength(16);
+        });
+
+        b.Entity<BacktestRecord>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasMaxLength(64);
+            e.Property(x => x.Name).HasMaxLength(120);
+            e.HasMany(x => x.Trades).WithOne().HasForeignKey(x => x.BacktestId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<BacktestTradeRecord>(e =>
+        {
+            e.HasIndex(x => x.BacktestId);
+            e.Property(x => x.BacktestId).HasMaxLength(64);
+            e.Property(x => x.Code).HasMaxLength(12);
+            e.Property(x => x.ExitReason).HasMaxLength(80);
+        });
+
+        b.Entity<MonitoringJob>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasMaxLength(64);
+            e.Property(x => x.Name).HasMaxLength(80);
+            e.Property(x => x.Cron).HasMaxLength(64);
+        });
+
+        b.Entity<MonitoringRun>(e =>
+        {
+            e.HasIndex(x => new { x.JobId, x.RunAt });
+            e.Property(x => x.JobId).HasMaxLength(64);
         });
     }
 }

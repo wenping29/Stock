@@ -289,6 +289,9 @@ public class FundEstimateTests : IDisposable
         public Task<List<MoneyFlowItem>> FetchMoneyFlowAsync(string symbol, int secMarket, int days, CancellationToken ct = default)
             => Task.FromResult(new List<MoneyFlowItem>());
 
+        public Task<List<SectorFlowItem>> FetchSectorMoneyFlowAsync(CancellationToken ct = default)
+            => Task.FromResult(new List<SectorFlowItem>());
+
         public Task<List<TrendPoint>> FetchTrendAsync(string symbol, int secMarket, CancellationToken ct = default)
             => Task.FromResult(new List<TrendPoint>());
 

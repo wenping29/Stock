@@ -239,6 +239,29 @@ if (args.Contains("--diag"))
     return 0;
 }
 
+// --import-node：把 stock-analyzer/server 的 SQLite 数据导入 fund_db（量化分析模块）
+//   dotnet run -- --import-node [--node-db "D:\Project\Stock\stock-analyzer\server\data\stock_data.db"]
+if (args.Contains("--import-node"))
+{
+    string? ValueOf(string name)
+    {
+        for (var i = 0; i < args.Length; i++)
+        {
+            if (args[i] == name && i + 1 < args.Length) return args[i + 1];
+            if (args[i].StartsWith(name + "=", StringComparison.Ordinal)) return args[i][(name.Length + 1)..];
+        }
+        return null;
+    }
+
+    var nodeDb = ValueOf("--node-db") ?? @"D:\Project\Stock\stock-analyzer\server\data\stock_data.db";
+    var importTarget = ValueOf("--target") ?? "Host=43.142.147.244;Port=5454;Database=fund_db;Username=fundmanager;Password=admin123456";
+    if (!File.Exists(nodeDb)) throw new FileNotFoundException("找不到 Node 数据库文件", nodeDb);
+    Console.WriteLine($"源: {nodeDb}");
+    Console.WriteLine($"目标: {importTarget}");
+    var rc = await NodeImporter.RunAsync(nodeDb, importTarget);
+    return rc;
+}
+
 var argsMap = new Dictionary<string, string>();
 for (var i = 0; i < args.Length - 1; i += 2)
     argsMap[args[i].TrimStart('-')] = args[i + 1];

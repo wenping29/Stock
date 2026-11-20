@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Encodings.Web;
+using FundAnalysis.Analysis;
 using FundAnalysis.Data;
 using FundAnalysis.Jobs;
 using FundAnalysis.Models;
@@ -140,6 +141,14 @@ builder.Services.AddScoped<AlertService>();
 builder.Services.AddScoped<MarketSentimentService>();
 builder.Services.AddScoped<TokenService>();
 
+// ---------- 量化分析模块（迁移自 stock-analyzer/server） ----------
+builder.Services.AddScoped<AnalysisDataService>();
+builder.Services.AddScoped<BacktestService>();
+builder.Services.AddScoped<ScreeningService>();
+builder.Services.AddScoped<MarketAnalysisService>();
+builder.Services.AddScoped<MonitoringService>();
+builder.Services.AddHttpClient("webhook", client => client.Timeout = TimeSpan.FromSeconds(10));
+
 // ---------- Swagger + CORS ----------
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
@@ -248,6 +257,13 @@ if (!EF.IsDesignTime)
             app.Logger.LogInformation("Web 端采集调度已关闭（Collector:ScheduleEnabled=false），采集由独立采集器负责");
         }
     }
+}
+
+// ---------- 量化监控任务：把库中启用的任务注册为 Hangfire 周期任务 ----------
+if (!EF.IsDesignTime)
+{
+    using var scope = app.Services.CreateScope();
+    await scope.ServiceProvider.GetRequiredService<MonitoringService>().RegisterAllAsync();
 }
 
 // ---------- 生产环境安全校验 ----------

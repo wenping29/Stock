@@ -133,6 +133,88 @@ namespace FundAnalysis.Migrations
                     b.ToTable("AspNetUsers", (string)null);
                 });
 
+            modelBuilder.Entity("FundAnalysis.Models.BacktestRecord", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ConfigJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("EquityCurveJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("MetricsJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("BacktestRecords");
+                });
+
+            modelBuilder.Entity("FundAnalysis.Models.BacktestTradeRecord", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("BacktestId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)");
+
+                    b.Property<DateTime>("EntryDate")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<double>("EntryPrice")
+                        .HasColumnType("double precision");
+
+                    b.Property<DateTime>("ExitDate")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<double>("ExitPrice")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("ExitReason")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<double>("Pnl")
+                        .HasColumnType("double precision");
+
+                    b.Property<double>("PnlPct")
+                        .HasColumnType("double precision");
+
+                    b.Property<double>("Shares")
+                        .HasColumnType("double precision");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BacktestId");
+
+                    b.ToTable("BacktestTradeRecords");
+                });
+
             modelBuilder.Entity("FundAnalysis.Models.FundHolding", b =>
                 {
                     b.Property<string>("FundCode")
@@ -426,6 +508,49 @@ namespace FundAnalysis.Migrations
                     b.ToTable("MarketSentimentDailies");
                 });
 
+            modelBuilder.Entity("FundAnalysis.Models.MarketSeriesPoint", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<double>("Close")
+                        .HasColumnType("double precision");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<double>("High")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<double>("Low")
+                        .HasColumnType("double precision");
+
+                    b.Property<double>("Open")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("Period")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Key", "Period");
+
+                    b.HasIndex("Key", "Period", "Date")
+                        .IsUnique();
+
+                    b.ToTable("MarketSeriesPoints");
+                });
+
             modelBuilder.Entity("FundAnalysis.Models.MoneyFlowDaily", b =>
                 {
                     b.Property<long>("Id")
@@ -496,6 +621,68 @@ namespace FundAnalysis.Migrations
                         .IsUnique();
 
                     b.ToTable("MoneySupplies");
+                });
+
+            modelBuilder.Entity("FundAnalysis.Models.MonitoringJob", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ConfigJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("Cron")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("MonitoringJobs");
+                });
+
+            modelBuilder.Entity("FundAnalysis.Models.MonitoringRun", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("EntrySignalsJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ExitSignalsJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("JobId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("RunAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("JobId", "RunAt");
+
+                    b.ToTable("MonitoringRuns");
                 });
 
             modelBuilder.Entity("FundAnalysis.Models.OmoOperation", b =>
@@ -995,6 +1182,15 @@ namespace FundAnalysis.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("FundAnalysis.Models.BacktestTradeRecord", b =>
+                {
+                    b.HasOne("FundAnalysis.Models.BacktestRecord", null)
+                        .WithMany("Trades")
+                        .HasForeignKey("BacktestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("FundAnalysis.Models.WatchlistItem", b =>
                 {
                     b.HasOne("FundAnalysis.Models.AppUser", "User")
@@ -1055,6 +1251,11 @@ namespace FundAnalysis.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("FundAnalysis.Models.BacktestRecord", b =>
+                {
+                    b.Navigation("Trades");
                 });
 #pragma warning restore 612, 618
         }
