@@ -92,6 +92,35 @@ crontab -e   # 粘贴 backend/FundAnalysis.Collector/deploy/crontab.example 中�
 > 切换数据库后需重新生成迁移（见"多数据库支持"）。
 > 采集器首次运行会自动建表（与 Web 共用迁移），Web 首次启动会自动创建 admin 账号。
 
+## 常驻数据服务（DataMigrator --serve）
+
+[DataMigrator](backend/DataMigrator/) 除 SQLite→PostgreSQL 搬迁外，内置常驻服务模式（取代原 stock-analyzer/patch 的 Node 服务）：
+
+```bash
+cd backend
+dotnet run --project DataMigrator -- --serve              # 默认 3012，全市场实时行情每 60s 刷新
+dotnet run --project DataMigrator -- --serve --port 3012 --monitor
+```
+
+| 参数 | 说明 |
+|------|------|
+| `--serve` | 启动实时行情服务：东财 clist 全市场抓取 + 内存缓存 + HTTP |
+| `--port` | 监听端口（默认 3012，也可用环境变量 `REALTIME_PORT`） |
+| `--monitor` | 额外按数据库 `MonitoringJobs` 的 cron 调度监控任务并推送 webhook（5/6 段 cron，每 20s 同步任务定义） |
+| `--conn` | 数据库连接串（默认同 Web 的生产 PG） |
+
+接口（与 patch 同构）：
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | /health | 服务状态 + 实时行情统计（`--monitor` 时附监控任务列表） |
+| GET | /api/quote/all | 全市场实时行情（约 5900 只，含 meta 统计） |
+| GET | /api/quote/{code} | 单只行情，未命中返回 404 |
+| POST | /api/quote/refresh | 手动触发全量刷新 |
+
+> `--monitor` 默认**关闭**：Web 端已由 Hangfire 注册监控任务，同时开启会重复推送 webhook。
+> 仅在停用 Web 端 Hangfire 后，用本服务承接监控 cron。
+
 ## 快速启动
 
 环境要求：.NET SDK 10+、Node.js 18+。
@@ -224,5 +253,6 @@ Tushare 适配器支持：标的搜索（本地缓存清单过滤）、日线（
 backend/FundAnalysis.Core/       共享类库：Models / Data(实体+DbContext+迁移) / Services(采集+分析) / Jobs
 backend/FundAnalysis/            Web API：Controllers + Program.cs（认证/查询/管理后台）
 backend/FundAnalysis.Collector/  独立采集器：once/daemon 双模式 + Dockerfile + docker-compose + cron 示例
+backend/DataMigrator/            数据搬迁工具 + 常驻实时行情/监控服务（--serve [--monitor]）
 frontend/src/                    前端：api / stores / router / views / components
 ```

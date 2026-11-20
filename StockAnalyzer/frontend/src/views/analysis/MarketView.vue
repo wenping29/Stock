@@ -47,12 +47,12 @@ const fxData = ref<PriceSeriesPoint[]>([])
 const goldPeriod = ref('daily')
 const goldData = ref<PriceSeriesPoint[]>([])
 
-const dateRange = (() => {
+const dateRange = ref((() => {
   const end = new Date()
   const start = new Date(end)
   start.setFullYear(end.getFullYear() - 1)
   return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) }
-})()
+})())
 
 const KLINE_PERIODS: { value: KlinePeriod; label: string }[] = [
   { value: '60min', label: '60分' },
@@ -105,18 +105,33 @@ async function loadIndexes() {
   }
 }
 
+let klineSeq = 0
+
 async function loadKline() {
   if (!selected.value) return
+  const seq = ++klineSeq
   klineLoading.value = true
   error.value = ''
   try {
-    klineData.value = await fetchIndexKline(selected.value.code, dateRange.start, dateRange.end, period.value)
+    const rows = await fetchIndexKline(
+      selected.value.code, dateRange.value.start, dateRange.value.end, period.value)
+    if (seq !== klineSeq) return
+    klineData.value = rows
   } catch (e) {
+    if (seq !== klineSeq) return
     error.value = analysisErrorMessage(e)
     klineData.value = []
   } finally {
-    klineLoading.value = false
+    if (seq === klineSeq) klineLoading.value = false
   }
+}
+
+// K 线图预设区间（1月/3月/6月/1年/全部）→ 按新区间重新查询
+function onKlineRangeChange(range: { start: string; end: string; months: number | 'all' }) {
+  dateRange.value = range.months === 'all'
+    ? { start: '2000-01-01', end: range.end }
+    : { start: range.start, end: range.end }
+  loadKline()
 }
 
 async function loadMacro() {
@@ -287,6 +302,7 @@ const goldChart = computed(() => ({
           :indicators="[]"
           :us-rate-data="usRate"
           :us-rate-label="rateMaturity"
+          @range-change="onKlineRangeChange"
         />
         <div v-else-if="!klineLoading" class="qa-empty">暂无行情数据</div>
 

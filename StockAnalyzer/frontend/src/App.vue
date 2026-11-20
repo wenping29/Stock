@@ -36,21 +36,17 @@ const menuItems = computed(() => {
     { path: '/screener', label: '🔍 选股' },
     { path: '/sentiment', label: '🌡️ 情绪' },
     { path: '/liquidity', label: '🏦 流动性' },
+    // 量化分析（迁移自 stock-analyzer）
+    { path: '/market', label: '🌐 大盘行情' },
+    { path: '/technical', label: '📐 技术指标' },
+    { path: '/multi-factor', label: '🧮 多因子筛选' },
+    { path: '/backtest', label: '🔁 策略回测' },
+    { path: '/optimization', label: '🎛️ 参数优化' },
+    { path: '/monitor', label: '🛰️ 监控' },
   ]
   if (auth.isAdmin) list.push({ path: '/admin', label: '⚙️ 管理后台' })
   return list
 })
-
-// 量化分析（迁移自 stock-analyzer）：桌面端收进下拉菜单，手机端在抽屉中单列
-const analysisItems = [
-  { path: '/market', label: '大盘行情' },
-  { path: '/technical', label: '技术指标' },
-  { path: '/multi-factor', label: '多因子筛选' },
-  { path: '/backtest', label: '策略回测' },
-  { path: '/optimization', label: '参数优化' },
-  { path: '/monitor', label: '监控' },
-]
-const analysisActive = computed(() => analysisItems.some((m) => route.path === m.path))
 
 function goMenu(path: string) {
   drawerOpen.value = false
@@ -98,16 +94,6 @@ function logout() {
       <!-- 桌面横向导航 -->
       <div class="nav" v-if="!isMobile">
         <router-link v-for="m in menuItems" :key="m.path" :to="m.path">{{ m.label.replace(/^\S+\s/, '') }}</router-link>
-        <el-dropdown trigger="click" popper-class="nav-dropdown">
-          <span class="nav-drop" :class="{ active: analysisActive }">量化分析 <i class="caret">▾</i></span>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item v-for="m in analysisItems" :key="m.path" @click="goMenu(m.path)">
-                {{ m.label }}
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
       </div>
       <div class="spacer" />
 
@@ -155,15 +141,6 @@ function logout() {
           @click="goMenu(m.path)"
         >{{ m.label }}</div>
         <div class="drawer-divider" />
-        <div class="drawer-section">量化分析</div>
-        <div
-          v-for="m in analysisItems"
-          :key="m.path"
-          class="drawer-item"
-          :class="{ active: route.path === m.path }"
-          @click="goMenu(m.path)"
-        >{{ m.label }}</div>
-        <div class="drawer-divider" />
         <div class="drawer-item" @click="pwdVisible = true; drawerOpen = false">🔑 修改密码</div>
         <div class="drawer-item danger" @click="logout">🚪 退出登录</div>
       </div>
@@ -203,12 +180,10 @@ function logout() {
 .brand { display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 600; cursor: pointer; white-space: nowrap; }
 .brand-logo { width: 28px; height: 28px; border-radius: 7px; display: block; }
 .brand-text { line-height: 1; }
-.nav { display: flex; gap: 18px; align-items: center; }
-.nav a { color: #c0c4cc; text-decoration: none; font-size: 15px; }
+.nav { display: flex; gap: 18px; align-items: center; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.nav::-webkit-scrollbar { display: none; }
+.nav a { color: #c0c4cc; text-decoration: none; font-size: 15px; white-space: nowrap; }
 .nav a.router-link-exact-active { color: #409eff; font-weight: 600; }
-.nav-drop { color: #c0c4cc; font-size: 15px; cursor: pointer; display: flex; align-items: center; gap: 2px; user-select: none; }
-.nav-drop:hover, .nav-drop.active { color: #409eff; font-weight: 600; }
-.nav-drop .caret { font-style: normal; font-size: 11px; }
 .spacer { flex: 1; }
 .user-chip { color: #fff; cursor: pointer; display: flex; align-items: center; gap: 6px; }
 
@@ -242,8 +217,14 @@ function logout() {
 .drawer-item:hover { background: #f5f7fa; }
 .drawer-item.active { background: #ecf5ff; color: #409eff; font-weight: 600; }
 .drawer-item.danger { color: #f56c6c; }
-.drawer-section { font-size: 12px; color: #909399; padding: 8px 8px 4px; }
 .drawer-divider { height: 1px; background: #ebeef5; margin: 8px 0; }
+
+/* 中等宽度桌面：收紧间距，保证 14 个一级菜单尽量单行显示 */
+@media (max-width: 1500px) and (min-width: 769px) {
+  .layout-header { gap: 16px; }
+  .nav { gap: 11px; }
+  .nav a { font-size: 13px; }
+}
 
 /* 手机端：导航可横向滑动，紧凑布局 */
 @media (max-width: 768px) {
