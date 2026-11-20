@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import type { FormInstance } from 'element-plus'
 import { useAuthStore } from '../stores/auth'
 
 const router = useRouter()
@@ -9,15 +10,17 @@ const auth = useAuthStore()
 
 const tab = ref<'login' | 'register'>('login')
 const loading = ref(false)
+const formRef = ref<FormInstance>()
 const form = ref({ userName: '', password: '', email: '' })
 
 const rules = {
-  userName: [{ required: true, min: 3, message: '用户名至少 3 个字符', trigger: 'blur' }],
-  password: [{ required: true, min: 6, message: '密码至少 6 位', trigger: 'blur' }],
+  userName: [{ required: true, min: 3, message: '用户名至少 3 个字符', trigger: ['blur', 'change'] }],
+  password: [{ required: true, min: 6, message: '密码至少 6 位', trigger: ['blur', 'change'] }],
 }
 
 async function submit() {
-  if (!form.value.userName || !form.value.password) return ElMessage.warning('请填写用户名和密码')
+  const valid = await formRef.value?.validate().catch(() => false)
+  if (!valid) return
   loading.value = true
   try {
     if (tab.value === 'login') {
@@ -48,9 +51,9 @@ async function submit() {
         <el-tab-pane label="注册" name="register" />
       </el-tabs>
 
-      <el-form @keyup.enter="submit">
+      <el-form ref="formRef" :model="form" @keyup.enter="submit">
         <el-form-item prop="userName" :rules="rules.userName">
-          <el-input v-model="form.userName" placeholder="用户名（默认管理员 admin）" size="large" />
+          <el-input v-model="form.userName" placeholder="用户名" size="large" />
         </el-form-item>
         <el-form-item prop="password" :rules="rules.password">
           <el-input v-model="form.password" type="password" show-password placeholder="密码" size="large" />
@@ -63,7 +66,7 @@ async function submit() {
         </el-button>
       </el-form>
 
-      <p class="default-account">初始管理员：admin / Admin@123（登录后请修改密码）</p>
+      <!-- <p class="default-account">初始管理员：admin / Admin@123（登录后请修改密码）</p> -->
     </div>
   </div>
 </template>
