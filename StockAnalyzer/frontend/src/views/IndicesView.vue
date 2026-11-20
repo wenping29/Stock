@@ -7,7 +7,7 @@ import { fetchIndexKline } from '../api/analysis'
 import type { KlineData, KlinePeriod } from '../types/analysis'
 import type { CollectCategory } from '../api/collect'
 import RefreshButton from '../components/RefreshButton.vue'
-import SparkLine from '../components/SparkLine.vue'
+import IndexGroupCard from '../components/IndexGroupCard.vue'
 import KLineChart from '../components/KLineChart.vue'
 import MarketMatrixChart from '../components/MarketMatrixChart.vue'
 import IntradayTrendChart from '../components/IntradayTrendChart.vue'
@@ -71,6 +71,10 @@ const groups = computed(() => {
   }
   return [...map.entries()].map(([group, list]) => ({ group, list }))
 })
+
+// A股宽基置顶（在指数详情卡上方），其余分组排在详情下方
+const topGroups = computed(() => groups.value.filter((g) => g.group === 'A股宽基'))
+const restGroups = computed(() => groups.value.filter((g) => g.group !== 'A股宽基'))
 
 /** 当前 Tab 是否无数据可展示 */
 const showEmpty = computed(() => {
@@ -188,6 +192,12 @@ onMounted(load)
       </el-empty>
     </div>
 
+    <!-- A股宽基（置顶，先看指数概览再看详情） -->
+    <div class="page-card" v-for="g in topGroups" :key="`top-${g.group}`">
+      <IndexGroupCard :title="g.group" :items="g.list"
+        :selected-code="selected?.code" @select="select" />
+    </div>
+
     <!-- 选中指数详情：Tab 切换 日K均线 / 大数据K线 / 股市矩阵 / 日内走势 -->
     <div class="page-card" v-if="selected">
       <div class="kline-head">
@@ -252,23 +262,10 @@ onMounted(load)
       </div>
     </div>
 
-    <!-- 指数网格（按分组） -->
-    <div class="page-card" v-for="g in groups" :key="g.group">
-      <div class="group-title">{{ g.group }}</div>
-      <div class="index-grid">
-        <div
-          v-for="idx in g.list" :key="idx.code"
-          class="index-cell" :class="{ active: selected?.code === idx.code }"
-          @click="select(idx)"
-        >
-          <div class="cell-head">
-            <span class="cell-name">{{ idx.name }}</span>
-            <span class="cell-pct" :class="pctClass(idx.changePct)">{{ fmtPct(idx.changePct) }}</span>
-          </div>
-          <div class="cell-price" :class="pctClass(idx.changePct)">{{ idx.price.toFixed(2) }}</div>
-          <SparkLine :data="idx.trend" :up="idx.changePct >= 0" />
-        </div>
-      </div>
+    <!-- 其余指数分组 -->
+    <div class="page-card" v-for="g in restGroups" :key="g.group">
+      <IndexGroupCard :title="g.group" :items="g.list"
+        :selected-code="selected?.code" @select="select" />
     </div>
   </div>
 </template>
@@ -296,17 +293,4 @@ onMounted(load)
 .period-item { padding: 4px 16px; cursor: pointer; font-size: 13px; color: #606266; background: #fff; user-select: none; }
 .period-item + .period-item { border-left: 1px solid #dcdfe6; }
 .period-item.active { background: #409eff; color: #fff; }
-
-.group-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; color: #606266; }
-.index-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
-.index-cell {
-  border: 1px solid #ebeef5; border-radius: 8px; padding: 10px 12px; cursor: pointer;
-  transition: all 0.15s;
-}
-.index-cell:hover { border-color: #409eff; }
-.index-cell.active { border-color: #409eff; background: #ecf5ff; }
-.cell-head { display: flex; justify-content: space-between; align-items: baseline; }
-.cell-name { font-size: 13px; color: #606266; }
-.cell-pct { font-size: 13px; font-weight: 600; }
-.cell-price { font-size: 17px; font-weight: 600; margin: 2px 0 4px; }
 </style>
