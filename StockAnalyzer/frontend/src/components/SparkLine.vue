@@ -3,7 +3,7 @@ import { onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import * as echarts from 'echarts'
 
 // 迷你走势图（无坐标轴，用于指数卡片）
-const props = defineProps<{ data: number[]; up?: boolean }>()
+const props = defineProps<{ data: number[]; up?: boolean; height?: number }>()
 
 const el = ref<HTMLElement>()
 let chart: echarts.ECharts | null = null
@@ -50,5 +50,5 @@ watch(() => props.data, render)
 </script>
 
 <template>
-  <div ref="el" style="width: 100%; height: 46px" />
+  <div ref="el" :style="{ width: '100%', height: (height ?? 46) + 'px' }" />
 </template>

@@ -140,8 +140,8 @@
 
 .qa-index-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  gap: 8px;
   margin-bottom: 16px;
 }
 
@@ -149,11 +149,12 @@
   text-align: left;
   background: #fff;
   border: 1px solid #ebeef5;
-  border-radius: 8px;
-  padding: 10px 12px;
+  border-radius: 6px;
+  padding: 6px 8px;
   cursor: pointer;
   transition: all 0.15s;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  min-width: 0;
 }
 
 .qa-index-card:hover {
@@ -167,7 +168,7 @@
 }
 
 .qa-index-card .name {
-  font-size: 12px;
+  font-size: 11px;
   color: #606266;
   white-space: nowrap;
   overflow: hidden;
@@ -175,14 +176,20 @@
 }
 
 .qa-index-card .price {
-  font-size: 18px;
+  font-size: 13px;
   font-weight: 600;
   font-family: 'SFMono-Regular', Consolas, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .qa-index-card .sub {
-  font-size: 12px;
+  font-size: 11px;
   font-family: 'SFMono-Regular', Consolas, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .qa-tag-row {

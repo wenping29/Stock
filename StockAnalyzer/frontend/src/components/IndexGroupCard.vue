@@ -21,27 +21,24 @@ function fmtPct(v: number) {
       class="index-cell" :class="{ active: selectedCode === idx.code }"
       @click="emit('select', idx)"
     >
-      <div class="cell-head">
-        <span class="cell-name">{{ idx.name }}</span>
-        <span class="cell-pct" :class="pctClass(idx.changePct)">{{ fmtPct(idx.changePct) }}</span>
-      </div>
+      <div class="cell-name" :title="idx.name">{{ idx.name }}</div>
       <div class="cell-price" :class="pctClass(idx.changePct)">{{ idx.price.toFixed(2) }}</div>
-      <SparkLine :data="idx.trend" :up="idx.changePct >= 0" />
+      <div class="cell-pct" :class="pctClass(idx.changePct)">{{ fmtPct(idx.changePct) }}</div>
+      <SparkLine :data="idx.trend" :up="idx.changePct >= 0" :height="26" />
     </div>
   </div>
 </template>
 
 <style scoped>
-.group-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; color: #606266; }
-.index-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+.group-title { font-size: 14px; font-weight: 600; margin-bottom: 8px; color: #606266; }
+.index-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(86px, 1fr)); gap: 8px; }
 .index-cell {
-  border: 1px solid #ebeef5; border-radius: 8px; padding: 10px 12px; cursor: pointer;
+  border: 1px solid #ebeef5; border-radius: 6px; padding: 6px 7px; cursor: pointer;
   transition: all 0.15s;
 }
 .index-cell:hover { border-color: #409eff; }
 .index-cell.active { border-color: #409eff; background: #ecf5ff; }
-.cell-head { display: flex; justify-content: space-between; align-items: baseline; }
-.cell-name { font-size: 13px; color: #606266; }
-.cell-pct { font-size: 13px; font-weight: 600; }
-.cell-price { font-size: 17px; font-weight: 600; margin: 2px 0 4px; }
+.cell-name { font-size: 11px; color: #606266; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cell-price { font-size: 13px; font-weight: 600; line-height: 1.25; }
+.cell-pct { font-size: 11px; font-weight: 600; line-height: 1.3; }
 </style>
