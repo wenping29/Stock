@@ -110,135 +110,140 @@ onMounted(load)
       </div>
     </div>
 
-    <!-- 两市成交量（点击进入详情） -->
-    <div class="page-card clickable-card volume-card" v-if="volume && volume.points.length" @click="router.push('/volume')">
-      <div class="card-head">
-        <h4>今日两市成交 <span class="vol-amount" :class="pctClass(volume.changePct)">{{ (volume.todayAmount / 10000).toFixed(2) }} 万亿</span></h4>
-        <span class="vol-change">
-          <template v-if="volume.changePct != null">
-            较昨日
-            <b :class="pctClass(volume.changePct)">
-              {{ (volume.changePct ?? 0) >= 0 ? '放量' : '缩量' }} {{ Math.abs(volume.changePct ?? 0).toFixed(1) }}%
-            </b>
-            （昨日 {{ (volume.yesterdayAmount / 10000).toFixed(2) }} 万亿）
-          </template>
-        </span>
-      </div>
-      <VolumeBarChart :points="volume.points" />
-      <div class="more-hint">点击查看 日 / 周 / 月 / 季度 / 年 完整成交量分析 →</div>
-    </div>
+    <!-- 主区：左列图表，右列自选与流动性速览 -->
+    <div class="dash-main">
+      <div class="dash-main-left">
+        <!-- 两市成交量（点击进入详情） -->
+        <div class="page-card clickable-card volume-card" v-if="volume && volume.points.length" @click="router.push('/volume')">
+          <div class="card-head">
+            <h4>今日两市成交 <span class="vol-amount" :class="pctClass(volume.changePct)">{{ (volume.todayAmount / 10000).toFixed(2) }} 万亿</span></h4>
+            <span class="vol-change">
+              <template v-if="volume.changePct != null">
+                较昨日
+                <b :class="pctClass(volume.changePct)">
+                  {{ (volume.changePct ?? 0) >= 0 ? '放量' : '缩量' }} {{ Math.abs(volume.changePct ?? 0).toFixed(1) }}%
+                </b>
+                （昨日 {{ (volume.yesterdayAmount / 10000).toFixed(2) }} 万亿）
+              </template>
+            </span>
+          </div>
+          <VolumeBarChart :points="volume.points" />
+          <div class="more-hint">点击查看 日 / 周 / 月 / 季度 / 年 完整成交量分析 →</div>
+        </div>
 
-    <!-- 北向 / 南向资金 -->
-    <div class="page-card hsgt-card" v-if="hsgt && hsgt.points.length">
-      <div class="card-head hsgt-head">
-        <div class="hsgt-item">
-          <span class="hsgt-label">北向（沪深股通）今日成交</span>
-          <span class="vol-amount" :class="pctClass(hsgt.northAmountChangePct)">{{ hsgt.northTodayAmount.toFixed(0) }} 亿</span>
-          <span class="vol-change" v-if="hsgt.northAmountChangePct != null">
-            较昨日 <b :class="pctClass(hsgt.northAmountChangePct)">+{{ hsgt.northAmountChangePct.toFixed(1) }}%</b>
-          </span>
-          <span class="hsgt-note">净流入自 2024-08 起停止披露，以成交额衡量活跃度</span>
+        <!-- 北向 / 南向资金 -->
+        <div class="page-card hsgt-card" v-if="hsgt && hsgt.points.length">
+          <div class="card-head hsgt-head">
+            <div class="hsgt-item">
+              <span class="hsgt-label">北向（沪深股通）今日成交</span>
+              <span class="vol-amount" :class="pctClass(hsgt.northAmountChangePct)">{{ hsgt.northTodayAmount.toFixed(0) }} 亿</span>
+              <span class="vol-change" v-if="hsgt.northAmountChangePct != null">
+                较昨日 <b :class="pctClass(hsgt.northAmountChangePct)">+{{ hsgt.northAmountChangePct.toFixed(1) }}%</b>
+              </span>
+              <span class="hsgt-note">净流入自 2024-08 起停止披露，以成交额衡量活跃度</span>
+            </div>
+            <div class="hsgt-item">
+              <span class="hsgt-label">南向（港股通）今日{{ hsgt.southTodayNetInflow >= 0 ? '净流入' : '净流出' }}</span>
+              <span class="vol-amount" :class="pctClass(hsgt.southTodayNetInflow)">{{ Math.abs(hsgt.southTodayNetInflow).toFixed(1) }} 亿</span>
+              <span class="vol-change">昨日 {{ hsgt.southYesterdayNetInflow >= 0 ? '净流入 ' : '净流出 ' }}{{ Math.abs(hsgt.southYesterdayNetInflow).toFixed(1) }} 亿</span>
+            </div>
+          </div>
+          <HsgtChart :points="hsgt.points" />
         </div>
-        <div class="hsgt-item">
-          <span class="hsgt-label">南向（港股通）今日{{ hsgt.southTodayNetInflow >= 0 ? '净流入' : '净流出' }}</span>
-          <span class="vol-amount" :class="pctClass(hsgt.southTodayNetInflow)">{{ Math.abs(hsgt.southTodayNetInflow).toFixed(1) }} 亿</span>
-          <span class="vol-change">昨日 {{ hsgt.southYesterdayNetInflow >= 0 ? '净流入 ' : '净流出 ' }}{{ Math.abs(hsgt.southYesterdayNetInflow).toFixed(1) }} 亿</span>
-        </div>
-      </div>
-      <HsgtChart :points="hsgt.points" />
-    </div>
 
-    <!-- 利率与汇率（合并折线图，双轴） -->
-    <div class="page-card rates-card" v-if="mergedRates">
-      <div class="card-head rate-merged-head">
-        <h4>利率与汇率</h4>
-        <div class="rate-stats" v-if="fx && us10y && cnBond">
-          <span>
-            人民币汇率 <b :class="fx.dayChangePct >= 0 ? 'down' : 'up'">{{ fx.latest.toFixed(4) }}</b>
-            <i :class="fx.dayChangePct >= 0 ? 'down' : 'up'">{{ fx.dayChangePct >= 0 ? '贬值' : '升值' }} {{ Math.abs(fx.dayChangePct).toFixed(2) }}%</i>
-          </span>
-          <span>
-            十年美债 <b :class="us10y.dayChangeBp >= 0 ? 'up' : 'down'">{{ us10y.latest.toFixed(2) }}%</b>
-            <i :class="us10y.dayChangeBp >= 0 ? 'up' : 'down'">{{ us10y.dayChangeBp >= 0 ? '+' : '' }}{{ (us10y.dayChangeBp / 100).toFixed(2) }}bp</i>
-          </span>
-          <span>
-            中国国债10Y <b :class="cnBond.dayChangeBp >= 0 ? 'up' : 'down'">{{ cnBond.latest10y.toFixed(2) }}%</b>
-            <i :class="cnBond.dayChangeBp >= 0 ? 'up' : 'down'">{{ cnBond.dayChangeBp >= 0 ? '+' : '' }}{{ (cnBond.dayChangeBp / 100).toFixed(2) }}bp</i>
-          </span>
-          <span class="spread">
-            中美利差 <b :class="(cnBond.latest10y - us10y.latest) >= 0 ? 'up' : 'down'">{{ ((cnBond.latest10y - us10y.latest) * 100).toFixed(0) }}bp</b>
-          </span>
+        <!-- 利率与汇率（合并折线图，双轴） -->
+        <div class="page-card rates-card" v-if="mergedRates">
+          <div class="card-head rate-merged-head">
+            <h4>利率与汇率</h4>
+            <div class="rate-stats" v-if="fx && us10y && cnBond">
+              <span>
+                人民币汇率 <b :class="fx.dayChangePct >= 0 ? 'down' : 'up'">{{ fx.latest.toFixed(4) }}</b>
+                <i :class="fx.dayChangePct >= 0 ? 'down' : 'up'">{{ fx.dayChangePct >= 0 ? '贬值' : '升值' }} {{ Math.abs(fx.dayChangePct).toFixed(2) }}%</i>
+              </span>
+              <span>
+                十年美债 <b :class="us10y.dayChangeBp >= 0 ? 'up' : 'down'">{{ us10y.latest.toFixed(2) }}%</b>
+                <i :class="us10y.dayChangeBp >= 0 ? 'up' : 'down'">{{ us10y.dayChangeBp >= 0 ? '+' : '' }}{{ (us10y.dayChangeBp / 100).toFixed(2) }}bp</i>
+              </span>
+              <span>
+                中国国债10Y <b :class="cnBond.dayChangeBp >= 0 ? 'up' : 'down'">{{ cnBond.latest10y.toFixed(2) }}%</b>
+                <i :class="cnBond.dayChangeBp >= 0 ? 'up' : 'down'">{{ cnBond.dayChangeBp >= 0 ? '+' : '' }}{{ (cnBond.dayChangeBp / 100).toFixed(2) }}bp</i>
+              </span>
+              <span class="spread">
+                中美利差 <b :class="(cnBond.latest10y - us10y.latest) >= 0 ? 'up' : 'down'">{{ ((cnBond.latest10y - us10y.latest) * 100).toFixed(0) }}bp</b>
+              </span>
+            </div>
+          </div>
+          <MultiLineChart
+            :times="mergedRates.times"
+            :series="[
+              { name: '人民币汇率(USDCNH)', data: mergedRates.usdcnh, color: '#b88230', yAxis: 1 },
+              { name: '美债10Y', data: mergedRates.us10y, color: '#5470c6' },
+              { name: '中国国债10Y', data: mergedRates.cn10y, color: '#c23531' },
+            ]"
+            y-label="利率 %" y2-label="汇率" unit="%" />
+          <div class="hsgt-note">左轴：国债收益率（%）· 右轴：美元兑人民币（上升=贬值）· 汇率上涨通常伴随中美利差走阔</div>
         </div>
-      </div>
-      <MultiLineChart
-        :times="mergedRates.times"
-        :series="[
-          { name: '人民币汇率(USDCNH)', data: mergedRates.usdcnh, color: '#b88230', yAxis: 1 },
-          { name: '美债10Y', data: mergedRates.us10y, color: '#5470c6' },
-          { name: '中国国债10Y', data: mergedRates.cn10y, color: '#c23531' },
-        ]"
-        y-label="利率 %" y2-label="汇率" unit="%" />
-      <div class="hsgt-note">左轴：国债收益率（%）· 右轴：美元兑人民币（上升=贬值）· 汇率上涨通常伴随中美利差走阔</div>
-    </div>
-
-    <div class="two-col">
-      <!-- 自选概览 -->
-      <div class="page-card">
-        <div class="card-head">
-          <h4>我的自选</h4>
-          <el-button link type="primary" @click="router.push('/watchlist')">进入自选分析 →</el-button>
-        </div>
-        <div class="mini-grid">
-          <div class="mini-item">
-            <div class="mini-value">{{ watchlist.length }}</div>
-            <div class="mini-label">自选标的</div>
-          </div>
-          <div class="mini-item">
-            <div class="mini-value up">{{ upCount }}</div>
-            <div class="mini-label">今日上涨</div>
-          </div>
-          <div class="mini-item">
-            <div class="mini-value down">{{ downCount }}</div>
-            <div class="mini-label">今日下跌</div>
-          </div>
-          <div class="mini-item">
-            <div class="mini-value" :class="pctClass(avgChange)">{{ fmtPct(avgChange) }}</div>
-            <div class="mini-label">今日平均涨跌</div>
-          </div>
-          <div class="mini-item">
-            <div class="mini-value" :class="pctClass(avgMonth)">{{ fmtPct(avgMonth) }}</div>
-            <div class="mini-label">近1月平均收益</div>
-          </div>
-        </div>
-        <el-empty v-if="!watchlist.length" description="自选为空，去自选页搜索添加" :image-size="60" />
       </div>
 
-      <!-- 央行流动性速览 -->
-      <div class="page-card">
-        <div class="card-head">
-          <h4>央行流动性速览</h4>
-          <el-button link type="primary" @click="router.push('/liquidity')">流动性分析 →</el-button>
+      <div class="dash-main-right">
+        <!-- 自选概览 -->
+        <div class="page-card">
+          <div class="card-head">
+            <h4>我的自选</h4>
+            <el-button link type="primary" @click="router.push('/watchlist')">进入自选分析 →</el-button>
+          </div>
+          <div class="mini-grid">
+            <div class="mini-item">
+              <div class="mini-value">{{ watchlist.length }}</div>
+              <div class="mini-label">自选标的</div>
+            </div>
+            <div class="mini-item">
+              <div class="mini-value up">{{ upCount }}</div>
+              <div class="mini-label">今日上涨</div>
+            </div>
+            <div class="mini-item">
+              <div class="mini-value down">{{ downCount }}</div>
+              <div class="mini-label">今日下跌</div>
+            </div>
+            <div class="mini-item">
+              <div class="mini-value" :class="pctClass(avgChange)">{{ fmtPct(avgChange) }}</div>
+              <div class="mini-label">今日平均涨跌</div>
+            </div>
+            <div class="mini-item">
+              <div class="mini-value" :class="pctClass(avgMonth)">{{ fmtPct(avgMonth) }}</div>
+              <div class="mini-label">近1月平均收益</div>
+            </div>
+          </div>
+          <el-empty v-if="!watchlist.length" description="自选为空，去自选页搜索添加" :image-size="60" />
         </div>
-        <div class="mini-grid" v-if="liquidity">
-          <div class="mini-item">
-            <div class="mini-value">{{ liquidity.shiborOn.toFixed(3) }}<span class="u">%</span></div>
-            <div class="mini-label">Shibor 隔夜 <span :class="pctClass(liquidity.shiborOnChangeBp)">{{ liquidity.shiborOnChangeBp >= 0 ? '+' : '' }}{{ liquidity.shiborOnChangeBp.toFixed(2) }}bp</span></div>
+
+        <!-- 央行流动性速览 -->
+        <div class="page-card">
+          <div class="card-head">
+            <h4>央行流动性速览</h4>
+            <el-button link type="primary" @click="router.push('/liquidity')">流动性分析 →</el-button>
           </div>
-          <div class="mini-item">
-            <div class="mini-value">{{ liquidity.shibor1W.toFixed(3) }}<span class="u">%</span></div>
-            <div class="mini-label">Shibor 1周</div>
-          </div>
-          <div class="mini-item">
-            <div class="mini-value" :class="pctClass(liquidity.m2YoY)">{{ liquidity.m2YoY.toFixed(1) }}%</div>
-            <div class="mini-label">M2 同比（{{ liquidity.latestSupplyMonth }}）</div>
-          </div>
-          <div class="mini-item">
-            <div class="mini-value">{{ liquidity.lpr1Y.toFixed(2) }}<span class="u">%</span></div>
-            <div class="mini-label">LPR 1年期</div>
-          </div>
-          <div class="mini-item">
-            <div class="mini-value">{{ liquidity.reserveLarge.toFixed(1) }}<span class="u">%</span></div>
-            <div class="mini-label">存准率（大型）</div>
+          <div class="mini-grid" v-if="liquidity">
+            <div class="mini-item">
+              <div class="mini-value">{{ liquidity.shiborOn.toFixed(3) }}<span class="u">%</span></div>
+              <div class="mini-label">Shibor 隔夜 <span :class="pctClass(liquidity.shiborOnChangeBp)">{{ liquidity.shiborOnChangeBp >= 0 ? '+' : '' }}{{ liquidity.shiborOnChangeBp.toFixed(2) }}bp</span></div>
+            </div>
+            <div class="mini-item">
+              <div class="mini-value">{{ liquidity.shibor1W.toFixed(3) }}<span class="u">%</span></div>
+              <div class="mini-label">Shibor 1周</div>
+            </div>
+            <div class="mini-item">
+              <div class="mini-value" :class="pctClass(liquidity.m2YoY)">{{ liquidity.m2YoY.toFixed(1) }}%</div>
+              <div class="mini-label">M2 同比（{{ liquidity.latestSupplyMonth }}）</div>
+            </div>
+            <div class="mini-item">
+              <div class="mini-value">{{ liquidity.lpr1Y.toFixed(2) }}<span class="u">%</span></div>
+              <div class="mini-label">LPR 1年期</div>
+            </div>
+            <div class="mini-item">
+              <div class="mini-value">{{ liquidity.reserveLarge.toFixed(1) }}<span class="u">%</span></div>
+              <div class="mini-label">存准率（大型）</div>
+            </div>
           </div>
         </div>
       </div>
@@ -277,13 +282,11 @@ onMounted(load)
 .clickable:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); }
 .clickable-card { cursor: pointer; transition: all 0.15s; }
 .clickable-card:hover { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); }
-.volume-card { width: 50%; }
-@media (max-width: 1000px) { .volume-card { width: 100%; } }
-.hsgt-card { width: 50%; }
-@media (max-width: 1000px) { .hsgt-card { width: 100%; } }
+/* 主区两列：左侧图表，右侧自选 / 流动性速览 */
+.dash-main { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+.dash-main-left, .dash-main-right { min-width: 0; }
 .hsgt-card .hsgt-head { flex-wrap: wrap; gap: 12px 48px; }
-.rates-card { width: 50%; }
-@media (max-width: 1000px) { .rates-card { width: 100%; } }
+@media (max-width: 1000px) { .dash-main { grid-template-columns: 1fr; } }
 .more-hint { text-align: right; color: #409eff; font-size: 12px; margin-top: 6px; }
 .idx-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 4px; gap: 4px; }
 .idx-head .label { font-size: 13px; white-space: nowrap; display: flex; align-items: center; gap: 4px; }
