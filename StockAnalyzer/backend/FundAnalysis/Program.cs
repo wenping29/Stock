@@ -197,7 +197,11 @@ if (!EF.IsDesignTime)
     {
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         // 注意：数据库需预先创建（见 deploy/createdb.sql 建库脚本）；表结构由下方迁移自动创建
-        await db.Database.MigrateAsync();
+        // 本地验证：SQLite 无对应迁移文件时，可通过 Database:AutoCreate=true 直接按模型建表
+        if (db.Database.IsSqlite() && config.GetValue("Database:AutoCreate", false))
+            await db.Database.EnsureCreatedAsync();
+        else
+            await db.Database.MigrateAsync();
         await DbSeeder.SeedAsync(scope.ServiceProvider);
 
         if (scheduleEnabled)

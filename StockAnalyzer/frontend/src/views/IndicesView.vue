@@ -43,6 +43,8 @@ interface ComponentRow {
   symbol: string
   name: string
   weight: number
+  /** 所属板块：优先行业板块，缺省时按代码推断上市板块 */
+  board: string
 }
 const formRows = ref<ComponentRow[]>([])
 
@@ -78,6 +80,24 @@ function matchBoard(code: string, filter: BoardFilter): boolean {
     default: return true
   }
 }
+
+/** 代码推断上市板块（与后端 ScreeningService.BoardOf 保持一致）。 */
+function boardOf(code: string): string {
+  if (code.startsWith('688') || code.startsWith('689')) return '科创板'
+  if (code.startsWith('300') || code.startsWith('301')) return '创业板'
+  if (code.startsWith('6')) return '沪市A股'
+  if (code.startsWith('0') || code.startsWith('3')) return '深市A股'
+  if (code.startsWith('920') || code.startsWith('8')) return '北交所'
+  if (code.startsWith('4')) return '新三板'
+  return '其他'
+}
+
+/** 个股所属板块：优先行业板块，缺省时按代码推断上市板块。 */
+function sectorOf(symbol: string, industry?: string): string {
+  return industry?.trim() || boardOf(symbol)
+}
+
+const stockInfoMap = computed(() => new Map(stockPool.value.map((s) => [s.code, s])))
 
 const filteredStocks = computed(() => {
   const kw = stockKeyword.value.trim().toLowerCase()
@@ -409,7 +429,12 @@ function openEdit(ci: CustomIndexItem) {
   editingId.value = ci.id
   formName.value = ci.name
   formBaseValue.value = ci.baseValue
-  formRows.value = ci.components.map((c) => ({ symbol: c.symbol, name: c.name, weight: c.weight }))
+  formRows.value = ci.components.map((c) => ({
+    symbol: c.symbol,
+    name: c.name,
+    weight: c.weight,
+    board: sectorOf(c.symbol, stockInfoMap.value.get(c.symbol)?.industry),
+  }))
   resetPickerState()
   customDialog.value = true
 }
@@ -422,7 +447,7 @@ function toggleStock(s: StockInfo) {
     clampCompPage()
     return
   }
-  formRows.value.push({ symbol: s.code, name: s.name, weight: 10 })
+  formRows.value.push({ symbol: s.code, name: s.name, weight: 10, board: sectorOf(s.code, s.industry) })
 }
 
 function removeComponent(row: ComponentRow) {
@@ -462,7 +487,10 @@ async function importPreset() {
   try {
     const detail = await fetchCustomIndexPreset(presetKey.value)
     formRows.value = detail.components.map((c) => ({
-      symbol: c.symbol, name: c.name, weight: c.weight,
+      symbol: c.symbol,
+      name: c.name,
+      weight: c.weight,
+      board: sectorOf(c.symbol, stockInfoMap.value.get(c.symbol)?.industry),
     }))
     compPage.value = 1
     ElMessage.success(`已导入 ${detail.components.length} 只成分股`)
@@ -643,34 +671,37 @@ onMounted(() => {
       </el-empty>
     </div>
 
-    <!-- 自定义指数：用户按股票组合与权重合成指数 -->
-    <div class="page-card">
-      <div class="custom-head">
-        <span class="group-title">自定义指数</span>
-        <el-button size="small" type="primary" @click="openCreate">新建自定义指数</el-button>
-      </div>
-      <div v-if="!customItems.length" class="custom-empty">
-        用自己的股票组合与权重合成指数：选择成分股 → 设置权重 → 查看走势与 K 线（基准点位默认 1000）
-      </div>
-      <div v-else class="index-grid">
-        <div v-for="ci in customItems" :key="ci.id"
-          class="index-cell" :class="{ active: selectedCustom?.id === ci.id }" @click="selectCustom(ci)">
-          <div class="cell-name" :title="ci.name">{{ ci.name }}</div>
-          <div class="cell-price" :class="pctClass(ci.changePct)">{{ ci.price.toFixed(2) }}</div>
-          <div class="cell-pct" :class="pctClass(ci.changePct)">{{ fmtPct(ci.changePct) }}</div>
-          <SparkLine :data="ci.trend" :up="ci.changePct >= 0" :height="26" />
-          <div class="cell-actions">
-            <span @click.stop="openEdit(ci)">编辑</span>
-            <span @click.stop="removeCustom(ci)">删除</span>
+    <!-- 自定义指数与 A股宽基同排展示，节省纵向空间 -->
+    <div class="top-row">
+      <!-- 自定义指数：用户按股票组合与权重合成指数 -->
+      <div class="page-card top-custom">
+        <div class="custom-head">
+          <span class="group-title">自定义指数</span>
+          <el-button size="small" type="primary" @click="openCreate">新建自定义指数</el-button>
+        </div>
+        <div v-if="!customItems.length" class="custom-empty">
+          用自己的股票组合与权重合成指数：选择成分股 → 设置权重 → 查看走势与 K 线（基准点位默认 1000）
+        </div>
+        <div v-else class="index-grid">
+          <div v-for="ci in customItems" :key="ci.id"
+            class="index-cell" :class="{ active: selectedCustom?.id === ci.id }" @click="selectCustom(ci)">
+            <div class="cell-name" :title="ci.name">{{ ci.name }}</div>
+            <div class="cell-price" :class="pctClass(ci.changePct)">{{ ci.price.toFixed(2) }}</div>
+            <div class="cell-pct" :class="pctClass(ci.changePct)">{{ fmtPct(ci.changePct) }}</div>
+            <SparkLine :data="ci.trend" :up="ci.changePct >= 0" :height="26" />
+            <div class="cell-actions">
+              <span @click.stop="openEdit(ci)">编辑</span>
+              <span @click.stop="removeCustom(ci)">删除</span>
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- A股宽基（置顶，先看指数概览再看详情） -->
-    <div class="page-card" v-for="g in topGroups" :key="`top-${g.group}`">
-      <IndexGroupCard :title="g.group" :items="g.list"
-        :selected-code="selected?.code" @select="select" />
+      <!-- A股宽基（置顶，先看指数概览再看详情） -->
+      <div class="page-card top-broad" v-for="g in topGroups" :key="`top-${g.group}`">
+        <IndexGroupCard :title="g.group" :items="g.list"
+          :selected-code="selected?.code" @select="select" />
+      </div>
     </div>
 
     <!-- 选中指数详情：Tab 切换 行情K线 / 日K均线 / 大数据K线 / 股市矩阵 / 日内走势 -->
@@ -832,6 +863,7 @@ onMounted(() => {
       <el-table v-if="pickedRows.length" :data="pagedPickedRows" size="small" max-height="200">
         <el-table-column prop="symbol" label="代码" width="90" />
         <el-table-column prop="name" label="名称" min-width="140" />
+        <el-table-column prop="board" label="板块" width="110" show-overflow-tooltip />
         <el-table-column label="权重(%)" width="140">
           <template #default="{ row }">
             <el-input-number v-model="row.weight" :min="0.0001" :max="10000" :precision="2"
@@ -929,6 +961,10 @@ onMounted(() => {
 .period-item.active { background: #409eff; color: #fff; }
 
 /* 自定义指数：卡片与编辑弹窗 */
+/* 顶部同排：自定义指数 + A股宽基，节省纵向空间 */
+.top-row { display: flex; gap: 16px; align-items: stretch; flex-wrap: wrap; }
+.top-custom { flex: 0 1 360px; min-width: 300px; }
+.top-broad { flex: 1 1 620px; min-width: 0; }
 .custom-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .group-title { font-size: 14px; font-weight: 600; color: #606266; }
 .custom-empty { color: #909399; font-size: 13px; }

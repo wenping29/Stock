@@ -6,7 +6,7 @@ set -euo pipefail
 # ==================== 配置区 ====================
 SERVER="root@43.142.147.244"
 PORT="22"
-SSH_KEY="$HOME/.ssh/uploaddata.pem"
+SSH_KEY="$HOME/.ssh/tx.pem"
 
 # 1. 前端静态项目配置
 LOCAL_FRONTEND="./dist/admin/"
