@@ -2,14 +2,18 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { CustomIndexItem, IndexItem, IndexTrendData, KLinePoint, SearchItem } from '../types'
-import { fetchIndices, fetchIndexTrend, searchSymbol } from '../api/quote'
+import type { CustomIndexItem, CustomIndexPreset, IndexItem, IndexTrendData, KLinePoint } from '../types'
+import { fetchIndices, fetchIndexTrend } from '../api/quote'
 import {
-  createCustomIndex, deleteCustomIndex, fetchCustomIndices, fetchCustomIndexKline, updateCustomIndex,
+  createCustomIndex, deleteCustomIndex, fetchCustomIndexPreset, fetchCustomIndexPresets,
+  fetchCustomIndices, fetchCustomIndexKline, updateCustomIndex,
 } from '../api/customIndex'
 import { fetchMoneySupply } from '../api/liquidity'
-import { fetchCnRateHistory, fetchIndexKline, fetchUsdRateHistory, fetchUsRateHistory, computeIndicators } from '../api/analysis'
-import type { IndicatorResult, KlineData, KlinePeriod } from '../types/analysis'
+import {
+  computeIndicators, fetchCnRateHistory, fetchIndexKline, fetchStockList,
+  fetchUsdRateHistory, fetchUsRateHistory,
+} from '../api/analysis'
+import type { IndicatorResult, KlineData, KlinePeriod, StockInfo } from '../types/analysis'
 import type { CollectCategory } from '../api/collect'
 import RefreshButton from '../components/RefreshButton.vue'
 import IndexGroupCard from '../components/IndexGroupCard.vue'
@@ -39,10 +43,52 @@ interface ComponentRow {
   symbol: string
   name: string
   weight: number
-  options: SearchItem[]
-  loading: boolean
 }
 const formRows = ref<ComponentRow[]>([])
+
+// 已选成分股分页（预设可能一次导入数百只，避免一次渲染过多行）
+const COMP_PAGE_SIZE = 50
+const compPage = ref(1)
+const pickedRows = computed(() => formRows.value.filter((r) => r.symbol))
+const pagedPickedRows = computed(() =>
+  pickedRows.value.slice((compPage.value - 1) * COMP_PAGE_SIZE, compPage.value * COMP_PAGE_SIZE))
+const selectedSymbols = computed(() => new Set(pickedRows.value.map((r) => r.symbol)))
+
+// 预设指数（官方成分股快速导入）
+const presets = ref<CustomIndexPreset[]>([])
+const presetKey = ref('')
+const presetLoading = ref(false)
+
+// 可选个股池：弹窗打开时加载一次，本地做市场/关键字筛选与分页
+const stockPool = ref<StockInfo[]>([])
+const stockPoolLoading = ref(false)
+const stockKeyword = ref('')
+type BoardFilter = 'all' | 'sh' | 'sz' | 'chinext' | 'star' | 'bj'
+const stockBoard = ref<BoardFilter>('all')
+const STOCK_PAGE_SIZE = 60
+const stockPage = ref(1)
+
+function matchBoard(code: string, filter: BoardFilter): boolean {
+  switch (filter) {
+    case 'sh': return code.startsWith('6')
+    case 'sz': return code.startsWith('0') || code.startsWith('3')
+    case 'chinext': return code.startsWith('30')
+    case 'star': return code.startsWith('68')
+    case 'bj': return code.startsWith('4') || code.startsWith('8') || code.startsWith('92')
+    default: return true
+  }
+}
+
+const filteredStocks = computed(() => {
+  const kw = stockKeyword.value.trim().toLowerCase()
+  return stockPool.value.filter((s) =>
+    matchBoard(s.code, stockBoard.value) &&
+    (!kw || s.code.toLowerCase().includes(kw) || s.name.toLowerCase().includes(kw)))
+})
+const pagedStocks = computed(() =>
+  filteredStocks.value.slice((stockPage.value - 1) * STOCK_PAGE_SIZE, stockPage.value * STOCK_PAGE_SIZE))
+
+watch([stockKeyword, stockBoard], () => { stockPage.value = 1 })
 
 type PeriodKey = '60min' | 'day' | 'week' | 'month'
 const period = ref<PeriodKey>('day')
@@ -319,15 +365,43 @@ function selectCustom(ci: CustomIndexItem) {
 }
 
 // ---- 自定义指数：新建 / 编辑 / 删除 ----
-function newRow(): ComponentRow {
-  return { symbol: '', name: '', weight: 10, options: [], loading: false }
+async function loadStockPool() {
+  if (stockPool.value.length || stockPoolLoading.value) return
+  stockPoolLoading.value = true
+  try {
+    stockPool.value = await fetchStockList('all')
+  } catch {
+    stockPool.value = []
+  } finally {
+    stockPoolLoading.value = false
+  }
+}
+
+async function loadPresets() {
+  if (presets.value.length) return
+  try {
+    presets.value = await fetchCustomIndexPresets()
+  } catch {
+    presets.value = []
+  }
+}
+
+function resetPickerState() {
+  stockKeyword.value = ''
+  stockBoard.value = 'all'
+  stockPage.value = 1
+  compPage.value = 1
+  presetKey.value = ''
+  loadStockPool()
+  loadPresets()
 }
 
 function openCreate() {
   editingId.value = null
   formName.value = ''
   formBaseValue.value = 1000
-  formRows.value = [newRow()]
+  formRows.value = []
+  resetPickerState()
   customDialog.value = true
 }
 
@@ -335,58 +409,73 @@ function openEdit(ci: CustomIndexItem) {
   editingId.value = ci.id
   formName.value = ci.name
   formBaseValue.value = ci.baseValue
-  formRows.value = ci.components.map((c) => ({
-    symbol: c.symbol,
-    name: c.name,
-    weight: c.weight,
-    options: [{ symbol: c.symbol, name: c.name, type: 'Stock', marketName: '' }],
-    loading: false,
-  }))
+  formRows.value = ci.components.map((c) => ({ symbol: c.symbol, name: c.name, weight: c.weight }))
+  resetPickerState()
   customDialog.value = true
 }
 
-function addRow() {
-  formRows.value.push(newRow())
+/** 点击个股：已选则移除，未选则追加为权重股。 */
+function toggleStock(s: StockInfo) {
+  const index = formRows.value.findIndex((r) => r.symbol === s.code)
+  if (index >= 0) {
+    formRows.value.splice(index, 1)
+    clampCompPage()
+    return
+  }
+  formRows.value.push({ symbol: s.code, name: s.name, weight: 10 })
 }
 
-function removeRow(index: number) {
-  formRows.value.splice(index, 1)
+function removeComponent(row: ComponentRow) {
+  const index = formRows.value.indexOf(row)
+  if (index >= 0) formRows.value.splice(index, 1)
+  clampCompPage()
 }
 
-function searchRowMethod(row: ComponentRow) {
-  return (query: string) => searchRow(row, query)
+function clearComponents() {
+  formRows.value = []
+  compPage.value = 1
 }
 
-async function searchRow(row: ComponentRow, query: string) {
-  if (!query.trim()) return
-  row.loading = true
+/** 删除成分后页码越界时回退到最后一页。 */
+function clampCompPage() {
+  const maxPage = Math.max(1, Math.ceil(pickedRows.value.length / COMP_PAGE_SIZE))
+  if (compPage.value > maxPage) compPage.value = maxPage
+}
+
+/** 导入预设指数成分股（已有成分股时确认后整体替换）。 */
+async function importPreset() {
+  if (!presetKey.value) return ElMessage.warning('请先选择预设指数')
+  const preset = presets.value.find((p) => p.key === presetKey.value)
+  if (pickedRows.value.length) {
+    try {
+      await ElMessageBox.confirm(
+        `将用「${preset?.name ?? presetKey.value}」的成分股替换当前 ${pickedRows.value.length} 只成分股？`,
+        '导入预设成分股',
+        { type: 'warning', confirmButtonText: '替换', cancelButtonText: '取消' },
+      )
+    } catch {
+      return
+    }
+  }
+
+  presetLoading.value = true
   try {
-    const res = await searchSymbol(query.trim())
-    const current = row.symbol
-      ? [{ symbol: row.symbol, name: row.name, type: 'Stock' as const, marketName: '' }]
-      : []
-    row.options = [
-      ...current,
-      ...res.filter((o) => o.type === 'Stock' && o.symbol !== current[0]?.symbol),
-    ]
+    const detail = await fetchCustomIndexPreset(presetKey.value)
+    formRows.value = detail.components.map((c) => ({
+      symbol: c.symbol, name: c.name, weight: c.weight,
+    }))
+    compPage.value = 1
+    ElMessage.success(`已导入 ${detail.components.length} 只成分股`)
   } catch {
-    row.options = row.options.slice(0, 1)
+    ElMessage.error('获取预设成分股失败，请稍后重试')
   } finally {
-    row.loading = false
+    presetLoading.value = false
   }
 }
 
-function onPickSymbol(row: ComponentRow, symbol: string) {
-  const hit = row.options.find((o) => o.symbol === symbol)
-  if (hit) {
-    row.symbol = hit.symbol
-    row.name = hit.name
-  }
-}
-
-/** 已选成分股等权分配（未选标的的行不参与）。 */
+/** 已选成分股等权分配。 */
 function equalizeWeights() {
-  const picked = formRows.value.filter((r) => r.symbol)
+  const picked = pickedRows.value
   if (!picked.length) return
   const weight = Math.round((100 / picked.length) * 100) / 100
   picked.forEach((r) => { r.weight = weight })
@@ -705,7 +794,9 @@ onMounted(() => {
 
     <!-- 新建 / 编辑自定义指数 -->
     <el-dialog v-model="customDialog" :title="editingId ? '编辑自定义指数' : '新建自定义指数'"
-      width="680px" :close-on-click-modal="false">
+      width="1120px" :close-on-click-modal="false" top="5vh">
+      <div class="ci-layout">
+      <div class="ci-main">
       <div class="ci-form-row">
         <span class="ci-form-label">指数名称</span>
         <el-input v-model="formName" maxlength="40" show-word-limit
@@ -716,29 +807,85 @@ onMounted(() => {
         <el-input-number v-model="formBaseValue" :min="1" :max="100000" :step="100" />
         <span class="ci-hint">首日点位，默认 1000</span>
       </div>
+
+      <!-- 快速配置：按官方成分股导入 -->
+      <div class="ci-form-row">
+        <span class="ci-form-label">快速配置</span>
+        <el-select v-model="presetKey" filterable placeholder="选择预设指数" style="width: 260px">
+          <el-option v-for="p in presets" :key="p.key"
+            :label="`${p.name}（${p.count} 只）`" :value="p.key" />
+        </el-select>
+        <el-button type="primary" plain :loading="presetLoading" :disabled="!presetKey"
+          @click="importPreset">导入成分股</el-button>
+        <span class="ci-hint">官方权重优先，无权重数据时等权</span>
+      </div>
+
       <div class="ci-rows-head">
-        <span class="ci-form-label">成分股与权重</span>
+        <span class="ci-form-label">已选成分股（{{ pickedRows.length }} 只）</span>
         <div>
-          <el-button size="small" text @click="equalizeWeights">等权分配</el-button>
-          <el-button size="small" type="primary" plain @click="addRow">添加成分股</el-button>
+          <el-button size="small" text :disabled="!pickedRows.length"
+            @click="equalizeWeights">等权分配</el-button>
+          <el-button size="small" text type="danger" :disabled="!pickedRows.length"
+            @click="clearComponents">清空</el-button>
         </div>
       </div>
-      <div v-for="(row, i) in formRows" :key="i" class="ci-row">
-        <el-select v-model="row.symbol" filterable remote
-          :remote-method="searchRowMethod(row)" :loading="row.loading"
-          placeholder="搜索股票代码 / 名称" style="flex: 1"
-          @change="onPickSymbol(row, $event)">
-          <el-option v-for="o in row.options" :key="o.symbol"
-            :label="`${o.name} ${o.symbol}`" :value="o.symbol" />
-        </el-select>
-        <el-input-number v-model="row.weight" :min="0.01" :max="10000" :precision="2"
-          :controls="false" style="width: 110px" />
-        <span class="ci-pct">%</span>
-        <el-button size="small" text type="danger" :disabled="formRows.length <= 1"
-          @click="removeRow(i)">删除</el-button>
+      <el-table v-if="pickedRows.length" :data="pagedPickedRows" size="small" max-height="200">
+        <el-table-column prop="symbol" label="代码" width="90" />
+        <el-table-column prop="name" label="名称" min-width="140" />
+        <el-table-column label="权重(%)" width="140">
+          <template #default="{ row }">
+            <el-input-number v-model="row.weight" :min="0.0001" :max="10000" :precision="2"
+              :controls="false" size="small" style="width: 100%" />
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="70">
+          <template #default="{ row }">
+            <el-button size="small" text type="danger" @click="removeComponent(row)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <div v-else class="ci-hint">尚未选择成分股：可在右侧个股列表点击添加，或通过上方预设一键导入。</div>
+      <div class="ci-pager" v-if="pickedRows.length > COMP_PAGE_SIZE">
+        <el-pagination v-model:current-page="compPage" :page-size="COMP_PAGE_SIZE"
+          :total="pickedRows.length" layout="prev, pager, next" small />
       </div>
-      <div class="ci-hint" v-if="formRows.length">
-        权重按合计归一化；最多 30 只成分股，权重须大于 0。保存后自动采集成分股日线，稍后可查看完整走势。
+      </div>
+
+      <!-- 右侧独立选股区：点击加入 / 移除权重股 -->
+      <aside class="ci-side">
+        <div class="ci-side-head">
+          <span class="ci-side-title">可选个股</span>
+          <span class="ci-side-count">共 {{ filteredStocks.length }} 只</span>
+        </div>
+        <div class="ci-picker-tools">
+          <el-select v-model="stockBoard" size="small" style="width: 120px">
+            <el-option label="全部市场" value="all" />
+            <el-option label="沪市" value="sh" />
+            <el-option label="深市" value="sz" />
+            <el-option label="创业板" value="chinext" />
+            <el-option label="科创板" value="star" />
+            <el-option label="北交所" value="bj" />
+          </el-select>
+          <el-input v-model="stockKeyword" size="small" clearable
+            placeholder="筛选代码 / 名称" style="flex: 1" />
+        </div>
+        <div v-loading="stockPoolLoading" class="ci-stock-grid">
+          <button v-for="s in pagedStocks" :key="s.code" type="button"
+            class="ci-stock" :class="{ active: selectedSymbols.has(s.code) }"
+            @click="toggleStock(s)">
+            <span class="ci-stock-name">{{ s.name }}</span>
+            <span class="ci-stock-code">{{ s.code }}</span>
+          </button>
+          <div v-if="!stockPoolLoading && !pagedStocks.length" class="ci-hint">没有匹配的个股</div>
+        </div>
+        <div class="ci-pager" v-if="filteredStocks.length > STOCK_PAGE_SIZE">
+          <el-pagination v-model:current-page="stockPage" :page-size="STOCK_PAGE_SIZE"
+            :total="filteredStocks.length" layout="prev, pager, next" small />
+        </div>
+      </aside>
+      </div>
+      <div class="ci-hint">
+        权重按合计归一化；保存后自动采集成分股日线，成分股较多时首次合成需要一些时间。
       </div>
       <template #footer>
         <el-button @click="customDialog = false">取消</el-button>
@@ -812,7 +959,36 @@ onMounted(() => {
 .ci-form-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
 .ci-form-label { width: 80px; color: #606266; font-size: 13px; }
 .ci-rows-head { display: flex; align-items: center; justify-content: space-between; margin: 4px 0 8px; }
-.ci-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.ci-pct { color: #909399; font-size: 12px; }
 .ci-hint { color: #909399; font-size: 12px; }
+
+/* 弹窗左右两栏：左侧编辑，右侧独立选股区（点击加入 / 移除权重股） */
+.ci-layout { display: flex; gap: 18px; align-items: stretch; }
+.ci-main { flex: 1; min-width: 0; }
+.ci-side {
+  width: 360px; flex: none; display: flex; flex-direction: column;
+  border-left: 1px solid #ebeef5; padding-left: 18px;
+}
+.ci-side-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.ci-side-title { font-size: 14px; font-weight: 600; color: #303133; }
+.ci-side-count { font-size: 12px; color: #909399; }
+.ci-picker-tools { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.ci-stock-grid {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px; height: 420px; overflow-y: auto; padding: 4px;
+  border: 1px solid #ebeef5; border-radius: 6px; align-content: start;
+}
+.ci-stock {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+  padding: 4px 8px; background: #fff; border: 1px solid #ebeef5;
+  border-radius: 4px; cursor: pointer; text-align: left; font: inherit;
+}
+.ci-stock:hover { border-color: #a0cfff; }
+.ci-stock.active { background: #ecf5ff; border-color: #409eff; }
+.ci-stock-name {
+  font-size: 12px; color: #303133; max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ci-stock-code { font-size: 11px; color: #909399; }
+.ci-stock.active .ci-stock-name { color: #409eff; font-weight: 600; }
+.ci-pager { display: flex; justify-content: flex-end; margin-top: 8px; }
 </style>

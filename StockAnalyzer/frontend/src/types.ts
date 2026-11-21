@@ -249,6 +249,20 @@ export interface CustomIndexItem {
   trend: number[]
 }
 
+/** 可快速导入的预设指数（官方成分股）。 */
+export interface CustomIndexPreset {
+  key: string
+  name: string
+  count: number
+}
+
+/** 预设指数成分股清单。 */
+export interface CustomIndexPresetDetail {
+  key: string
+  name: string
+  components: CustomIndexComponent[]
+}
+
 /** 指数日内分时点。time 为 HH:mm；avg 为当日累计均价；volume 单位：手。 */
 export interface IndexTrendPoint {
   time: string

@@ -24,6 +24,24 @@ public class CustomIndexController(
     public async Task<IActionResult> List(CancellationToken ct)
         => Ok(await service.GetSnapshotsAsync(UserId, ct));
 
+    /// <summary>可快速导入的预设指数（上证50 / 沪深300 / 中证500 等官方成分股）。</summary>
+    [HttpGet("presets")]
+    public IActionResult Presets() => Ok(CustomIndexService.GetPresets());
+
+    /// <summary>预设指数成分股与权重。</summary>
+    [HttpGet("presets/{key}")]
+    public async Task<IActionResult> Preset(string key, CancellationToken ct)
+    {
+        try
+        {
+            return Ok(await service.GetPresetAsync(key, ct));
+        }
+        catch (AnalysisRequestException ex)
+        {
+            return StatusCode(ex.StatusCode, new { message = ex.Message });
+        }
+    }
+
     /// <summary>自定义指数合成 K 线（日/周/月/季/年）。</summary>
     [HttpGet("{id:long}/kline")]
     public async Task<IActionResult> Kline(
@@ -115,17 +133,26 @@ public class CustomIndexController(
             .ToList();
 
         var symbols = items.Select(x => x.Symbol).ToList();
-        var existing = await db.StockBasics
-            .Where(x => symbols.Contains(x.Symbol))
-            .Select(x => x.Symbol)
-            .ToListAsync();
+
+        // 成分股可能多达上千只，按批查询避免 SQL 参数超限（SQLite 上限 999）
+        var existing = new HashSet<string>();
+        var fundamentals = new Dictionary<string, StockFundamental>();
+        foreach (var chunk in symbols.Chunk(500))
+        {
+            existing.UnionWith(await db.StockBasics
+                .Where(x => chunk.Contains(x.Symbol))
+                .Select(x => x.Symbol)
+                .ToListAsync());
+            foreach (var kv in await db.StockFundamentals
+                .Where(x => chunk.Contains(x.Symbol))
+                .ToDictionaryAsync(x => x.Symbol))
+                fundamentals[kv.Key] = kv.Value;
+        }
+
         var missing = items.Where(x => !existing.Contains(x.Symbol)).ToList();
 
         if (missing.Count > 0)
         {
-            var fundamentals = await db.StockFundamentals
-                .Where(x => symbols.Contains(x.Symbol))
-                .ToDictionaryAsync(x => x.Symbol);
             foreach (var (symbol, name) in missing)
             {
                 fundamentals.TryGetValue(symbol, out var fund);

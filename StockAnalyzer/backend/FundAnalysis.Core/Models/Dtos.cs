@@ -155,6 +155,12 @@ public record CustomIndexSaveRequest(
 
 public record CustomIndexComponentInput(string Symbol, string? Name, double Weight);
 
+/// <summary>预设指数（按官方成分股快速配置自定义指数）。</summary>
+public record CustomIndexPresetDto(string Key, string Name, int Count);
+
+/// <summary>预设指数成分股清单；Weight 为官方权重，缺失时按等权填充。</summary>
+public record CustomIndexPresetDetailDto(string Key, string Name, List<CustomIndexComponentDto> Components);
+
 /// <summary>
 /// 手动采集作业（前端"刷新"触发）。State 取 Hangfire 作业状态：
 /// Enqueued / Processing / Succeeded / Failed / Scheduled 等。

@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Text.Json;
 using FundAnalysis.Analysis;
 using FundAnalysis.Data;
 using FundAnalysis.Models;
@@ -10,10 +12,27 @@ namespace FundAnalysis.Services;
 /// 采用"价格相对值加权"：每日点位 = 基准点位 × Σ(权重 × 当日价 / 首日收盘价) / Σ权重，
 /// 因此不同查询区间看到的历史点位一致；停牌或缺失数据时沿用最近收盘价，保持权重完整。
 /// </summary>
-public class CustomIndexService(AppDbContext db, AnalysisDataService data)
+public class CustomIndexService(AppDbContext db, AnalysisDataService data, IHttpClientFactory httpFactory)
 {
-    public const int MaxComponents = 30;
     private const int MaxNameLength = 40;
+
+    // 预设指数：东财数据中心 RPT_INDEX_TS_COMPONENT 的 TYPE 与成分数（已核对）
+    private static readonly (string Key, string Name, string Type, int Count)[] PresetDefs =
+    [
+        ("sse50", "上证50", "2", 50),
+        ("hs300", "沪深300", "1", 300),
+        ("csi500", "中证500", "3", 500),
+        ("csi1000", "中证1000", "7", 1000),
+        ("star50", "科创50", "4", 50),
+        ("sse180", "上证180", "11", 180),
+        ("szse", "深证成指", "6", 500),
+        ("szse100", "深证100", "12", 100),
+        ("bse50", "北证50", "10", 50),
+    ];
+
+    // 成分股变动频率低，缓存 6 小时，避免每次打开弹窗都请求外网
+    private static readonly ConcurrentDictionary<string, (DateTime At, List<CustomIndexComponentDto> Items)> PresetCache = new();
+    private static readonly SemaphoreSlim PresetLock = new(1, 1);
 
     public async Task<List<CustomIndex>> ListAsync(string userId, CancellationToken ct = default)
         => await db.CustomIndices.AsNoTracking()
@@ -58,6 +77,110 @@ public class CustomIndexService(AppDbContext db, AnalysisDataService data)
         return await BuildKlinesAsync(index, start, end, period, limit, allowFetch: true, ct);
     }
 
+    /// <summary>可快速导入的预设指数列表。</summary>
+    public static List<CustomIndexPresetDto> GetPresets()
+        => [.. PresetDefs.Select(p => new CustomIndexPresetDto(p.Key, p.Name, p.Count))];
+
+    /// <summary>预设指数成分股及权重（官方权重优先，缺失时整体等权）。</summary>
+    public async Task<CustomIndexPresetDetailDto> GetPresetAsync(string key, CancellationToken ct = default)
+    {
+        var def = PresetDefs.FirstOrDefault(p => p.Key.Equals(key, StringComparison.OrdinalIgnoreCase));
+        if (def.Key is null) throw new AnalysisRequestException("未知的预设指数", 404);
+
+        if (TryGetCachedPreset(def.Key, out var cached))
+            return new CustomIndexPresetDetailDto(def.Key, def.Name, cached);
+
+        await PresetLock.WaitAsync(ct);
+        try
+        {
+            if (TryGetCachedPreset(def.Key, out cached))
+                return new CustomIndexPresetDetailDto(def.Key, def.Name, cached);
+
+            var items = await FetchPresetComponentsAsync(def.Type, ct);
+            if (items.Count == 0)
+                throw new AnalysisRequestException($"未获取到{def.Name}成分股，请稍后重试", 502);
+
+            PresetCache[def.Key] = (DateTime.Now, items);
+            return new CustomIndexPresetDetailDto(def.Key, def.Name, items);
+        }
+        finally
+        {
+            PresetLock.Release();
+        }
+    }
+
+    private static bool TryGetCachedPreset(string key, out List<CustomIndexComponentDto> items)
+    {
+        if (PresetCache.TryGetValue(key, out var entry) && DateTime.Now - entry.At < TimeSpan.FromHours(6))
+        {
+            items = entry.Items;
+            return true;
+        }
+        items = [];
+        return false;
+    }
+
+    private async Task<List<CustomIndexComponentDto>> FetchPresetComponentsAsync(string type, CancellationToken ct)
+    {
+        using var client = httpFactory.CreateClient("eastmoney");
+        client.Timeout = TimeSpan.FromSeconds(20);
+        client.DefaultRequestHeaders.UserAgent.ParseAdd(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36");
+        client.DefaultRequestHeaders.Referrer = new Uri("https://quote.eastmoney.com/");
+
+        const int pageSize = 500;
+        var rows = new List<(string Symbol, string Name, double Weight)>();
+        try
+        {
+            var filter = Uri.EscapeDataString($"(TYPE=\"{type}\")");
+            for (var page = 1; page <= 20; page++)
+            {
+                var url = "https://datacenter-web.eastmoney.com/api/data/v1/get"
+                          + "?reportName=RPT_INDEX_TS_COMPONENT&columns=SECURITY_CODE,SECURITY_NAME_ABBR,WEIGHT"
+                          + $"&filter={filter}&pageNumber={page}&pageSize={pageSize}"
+                          + "&sortColumns=SECURITY_CODE&sortTypes=1";
+                using var doc = JsonDocument.Parse(await client.GetStringAsync(url, ct));
+                if (!doc.RootElement.TryGetProperty("result", out var result) ||
+                    result.ValueKind != JsonValueKind.Object ||
+                    !result.TryGetProperty("data", out var arr) || arr.ValueKind != JsonValueKind.Array)
+                    break;
+
+                var count = 0;
+                foreach (var row in arr.EnumerateArray())
+                {
+                    var symbol = GetString(row, "SECURITY_CODE");
+                    if (string.IsNullOrWhiteSpace(symbol)) continue;
+
+                    var weight = 0d;
+                    if (row.TryGetProperty("WEIGHT", out var w) && w.ValueKind == JsonValueKind.Number)
+                        weight = w.GetDouble();
+
+                    rows.Add((symbol, GetString(row, "SECURITY_NAME_ABBR") ?? symbol, weight));
+                    count++;
+                }
+
+                if (count < pageSize) break;
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
+        {
+            throw new AnalysisRequestException("获取预设指数成分失败，请稍后重试", 502);
+        }
+
+        if (rows.Count == 0) return [];
+
+        // 官方权重可用则使用官方权重，否则整体等权
+        var useOfficial = rows.All(r => r.Weight > 0);
+        var equal = Math.Round(100d / rows.Count, 4);
+        return [.. rows
+            .DistinctBy(r => r.Symbol)
+            .Select(r => new CustomIndexComponentDto(
+                r.Symbol, r.Name, useOfficial ? Math.Round(r.Weight, 4) : equal))];
+    }
+
+    private static string? GetString(JsonElement row, string name)
+        => row.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+
     /// <summary>校验并整理保存请求；返回错误信息，null 表示通过。</summary>
     public static string? NormalizeRequest(
         CustomIndexSaveRequest request, out string name, out double baseValue,
@@ -74,7 +197,6 @@ public class CustomIndexService(AppDbContext db, AnalysisDataService data)
             .Where(c => !string.IsNullOrWhiteSpace(c.Symbol))
             .ToList();
         if (inputs.Count == 0) return "请至少添加一只成分股";
-        if (inputs.Count > MaxComponents) return $"成分股最多 {MaxComponents} 只";
 
         var duplicated = inputs.GroupBy(c => c.Symbol.Trim()).FirstOrDefault(g => g.Count() > 1);
         if (duplicated is not null) return $"成分股 {duplicated.Key} 重复";

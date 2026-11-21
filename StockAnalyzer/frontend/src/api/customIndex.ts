@@ -1,5 +1,5 @@
 import http from './http'
-import type { CustomIndexItem } from '../types'
+import type { CustomIndexItem, CustomIndexPreset, CustomIndexPresetDetail } from '../types'
 import type { KlineData, KlinePeriod } from '../types/analysis'
 
 export interface CustomIndexPayload {
@@ -25,6 +25,18 @@ export async function updateCustomIndex(id: number, payload: CustomIndexPayload)
 
 export async function deleteCustomIndex(id: number): Promise<void> {
   await http.delete(`/custom-index/${id}`)
+}
+
+/** 可快速导入的预设指数列表。 */
+export async function fetchCustomIndexPresets(): Promise<CustomIndexPreset[]> {
+  const { data } = await http.get('/custom-index/presets')
+  return data
+}
+
+/** 预设指数成分股与权重。 */
+export async function fetchCustomIndexPreset(key: string): Promise<CustomIndexPresetDetail> {
+  const { data } = await http.get(`/custom-index/presets/${key}`)
+  return data
 }
 
 /** 自定义指数合成 K 线（日/周/月/季/年，60 分钟不支持）。 */
