@@ -1,14 +1,19 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import type { IndexItem, IndexTrendData, KLinePoint } from '../types'
-import { fetchIndices, fetchIndexTrend } from '../api/quote'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import type { CustomIndexItem, IndexItem, IndexTrendData, KLinePoint, SearchItem } from '../types'
+import { fetchIndices, fetchIndexTrend, searchSymbol } from '../api/quote'
+import {
+  createCustomIndex, deleteCustomIndex, fetchCustomIndices, fetchCustomIndexKline, updateCustomIndex,
+} from '../api/customIndex'
 import { fetchMoneySupply } from '../api/liquidity'
 import { fetchCnRateHistory, fetchIndexKline, fetchUsdRateHistory, fetchUsRateHistory, computeIndicators } from '../api/analysis'
 import type { IndicatorResult, KlineData, KlinePeriod } from '../types/analysis'
 import type { CollectCategory } from '../api/collect'
 import RefreshButton from '../components/RefreshButton.vue'
 import IndexGroupCard from '../components/IndexGroupCard.vue'
+import SparkLine from '../components/SparkLine.vue'
 import StockChart from '../components/analysis/StockChart.vue'
 import IndicatorChart from '../components/analysis/IndicatorChart.vue'
 import KLineChart from '../components/KLineChart.vue'
@@ -21,6 +26,24 @@ const items = ref<IndexItem[]>([])
 const loading = ref(true)
 
 const selected = ref<IndexItem | null>(null)
+
+// ---- 自定义指数（用户按股票 + 权重合成，接口按当前用户隔离） ----
+const customItems = ref<CustomIndexItem[]>([])
+const selectedCustom = ref<CustomIndexItem | null>(null)
+const customDialog = ref(false)
+const customSaving = ref(false)
+const editingId = ref<number | null>(null)
+const formName = ref('')
+const formBaseValue = ref(1000)
+interface ComponentRow {
+  symbol: string
+  name: string
+  weight: number
+  options: SearchItem[]
+  loading: boolean
+}
+const formRows = ref<ComponentRow[]>([])
+
 type PeriodKey = '60min' | 'day' | 'week' | 'month'
 const period = ref<PeriodKey>('day')
 
@@ -57,14 +80,21 @@ function toKlinePoints(rows: KlineData[]): KLinePoint[] {
 
 // 详情区 Tab：行情K线 / 日K均线 / 大数据K线 / 股市矩阵 / 日内走势
 type TabKey = 'quote' | 'kline' | 'bigkline' | 'matrix' | 'intraday'
-const tabs: { key: TabKey; label: string }[] = [
+const ALL_TABS: { key: TabKey; label: string }[] = [
   { key: 'quote', label: '行情K线' },
   { key: 'kline', label: '日K · 均线' },
   { key: 'bigkline', label: '大数据K线' },
   { key: 'matrix', label: '股市矩阵' },
   { key: 'intraday', label: '日内走势' },
 ]
+// 自定义指数没有采集分时数据，隐藏"日内走势"
+const tabs = computed(() =>
+  selectedCustom.value ? ALL_TABS.filter((t) => t.key !== 'intraday') : ALL_TABS)
 const tab = ref<TabKey>('quote')
+
+// 自定义指数不支持 60 分钟周期
+const periodKeys = computed(() =>
+  selectedCustom.value ? PERIOD_KEYS.filter((p) => p !== '60min') : PERIOD_KEYS)
 
 const points = ref<KLinePoint[]>([])
 const bigPoints = ref<KLinePoint[]>([])
@@ -93,8 +123,12 @@ async function loadQuote() {
   const seq = ++quoteSeq
   klineLoading.value = true
   try {
-    const rows = await fetchIndexKline(
-      selected.value.code, dateRange.value.start, dateRange.value.end, PERIOD_MAP[quotePeriod.value])
+    const rows = selectedCustom.value
+      ? await fetchCustomIndexKline(
+          selectedCustom.value.id, dateRange.value.start, dateRange.value.end,
+          PERIOD_MAP[quotePeriod.value])
+      : await fetchIndexKline(
+          selected.value.code, dateRange.value.start, dateRange.value.end, PERIOD_MAP[quotePeriod.value])
     if (seq !== quoteSeq) return
     klineData.value = rows
   } catch {
@@ -231,10 +265,192 @@ async function load() {
   }
 }
 
+async function loadCustom() {
+  try {
+    customItems.value = await fetchCustomIndices()
+  } catch {
+    customItems.value = []
+  }
+  const current = selectedCustom.value
+  if (!current) return
+  const fresh = customItems.value.find((c) => c.id === current.id)
+  if (!fresh) {
+    // 已被删除：回到第一个内置指数
+    selectedCustom.value = null
+    selected.value = items.value[0] ?? null
+    if (selected.value) await loadTabData()
+    return
+  }
+  selectedCustom.value = fresh
+  if (selected.value) {
+    selected.value = {
+      ...selected.value,
+      name: fresh.name,
+      price: fresh.price,
+      changePct: fresh.changePct,
+      trend: fresh.trend,
+    }
+  }
+}
+
 function select(item: IndexItem) {
-  if (selected.value?.code === item.code) return
+  if (!selectedCustom.value && selected.value?.code === item.code) return
+  selectedCustom.value = null
   selected.value = item
   loadTabData()
+}
+
+/** 选中自定义指数：映射为 IndexItem 复用卡片/详情结构。 */
+function selectCustom(ci: CustomIndexItem) {
+  selectedCustom.value = ci
+  selected.value = {
+    code: `CI${ci.id}`,
+    name: ci.name,
+    group: '自定义指数',
+    price: ci.price,
+    changePct: ci.changePct,
+    amount: 0,
+    trend: ci.trend,
+  }
+  if (tab.value === 'intraday') tab.value = 'quote'
+  if (quotePeriod.value === '60min') quotePeriod.value = 'day'
+  if (period.value === '60min') period.value = 'day'
+  loadTabData()
+}
+
+// ---- 自定义指数：新建 / 编辑 / 删除 ----
+function newRow(): ComponentRow {
+  return { symbol: '', name: '', weight: 10, options: [], loading: false }
+}
+
+function openCreate() {
+  editingId.value = null
+  formName.value = ''
+  formBaseValue.value = 1000
+  formRows.value = [newRow()]
+  customDialog.value = true
+}
+
+function openEdit(ci: CustomIndexItem) {
+  editingId.value = ci.id
+  formName.value = ci.name
+  formBaseValue.value = ci.baseValue
+  formRows.value = ci.components.map((c) => ({
+    symbol: c.symbol,
+    name: c.name,
+    weight: c.weight,
+    options: [{ symbol: c.symbol, name: c.name, type: 'Stock', marketName: '' }],
+    loading: false,
+  }))
+  customDialog.value = true
+}
+
+function addRow() {
+  formRows.value.push(newRow())
+}
+
+function removeRow(index: number) {
+  formRows.value.splice(index, 1)
+}
+
+function searchRowMethod(row: ComponentRow) {
+  return (query: string) => searchRow(row, query)
+}
+
+async function searchRow(row: ComponentRow, query: string) {
+  if (!query.trim()) return
+  row.loading = true
+  try {
+    const res = await searchSymbol(query.trim())
+    const current = row.symbol
+      ? [{ symbol: row.symbol, name: row.name, type: 'Stock' as const, marketName: '' }]
+      : []
+    row.options = [
+      ...current,
+      ...res.filter((o) => o.type === 'Stock' && o.symbol !== current[0]?.symbol),
+    ]
+  } catch {
+    row.options = row.options.slice(0, 1)
+  } finally {
+    row.loading = false
+  }
+}
+
+function onPickSymbol(row: ComponentRow, symbol: string) {
+  const hit = row.options.find((o) => o.symbol === symbol)
+  if (hit) {
+    row.symbol = hit.symbol
+    row.name = hit.name
+  }
+}
+
+/** 已选成分股等权分配（未选标的的行不参与）。 */
+function equalizeWeights() {
+  const picked = formRows.value.filter((r) => r.symbol)
+  if (!picked.length) return
+  const weight = Math.round((100 / picked.length) * 100) / 100
+  picked.forEach((r) => { r.weight = weight })
+}
+
+async function saveCustom() {
+  const name = formName.value.trim()
+  const components = formRows.value.filter((r) => r.symbol)
+  if (!name) return ElMessage.warning('请填写指数名称')
+  if (!components.length) return ElMessage.warning('请至少添加一只成分股')
+  if (components.some((r) => !(r.weight > 0))) return ElMessage.warning('权重必须大于 0')
+  if (new Set(components.map((r) => r.symbol)).size !== components.length)
+    return ElMessage.warning('成分股不能重复')
+
+  customSaving.value = true
+  try {
+    const payload = {
+      name,
+      baseValue: formBaseValue.value || 1000,
+      components: components.map((r) => ({ symbol: r.symbol, name: r.name, weight: r.weight })),
+    }
+    let createdId: number | null = null
+    if (editingId.value) {
+      await updateCustomIndex(editingId.value, payload)
+    } else {
+      createdId = (await createCustomIndex(payload)).id
+    }
+    customDialog.value = false
+    ElMessage.success(editingId.value ? '已保存' : '已创建，成分股数据采集中，稍后可见完整走势')
+    await loadCustom()
+    const created = createdId ? customItems.value.find((c) => c.id === createdId) : null
+    if (created) {
+      tab.value = 'quote'
+      selectCustom(created)
+    } else {
+      await loadTabData()
+    }
+  } finally {
+    customSaving.value = false
+  }
+}
+
+async function removeCustom(ci: CustomIndexItem) {
+  try {
+    await ElMessageBox.confirm(`确定删除自定义指数「${ci.name}」？`, '删除自定义指数', {
+      type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消',
+    })
+  } catch {
+    return
+  }
+  await deleteCustomIndex(ci.id)
+  ElMessage.success('已删除')
+  if (selectedCustom.value?.id === ci.id) {
+    selectedCustom.value = null
+    selected.value = items.value[0] ?? null
+  }
+  await loadCustom()
+  if (selected.value) await loadTabData()
+}
+
+/** 自定义指数"重新计算"：重载清单与当前 Tab 数据。 */
+async function refreshCustom() {
+  await loadCustom()
+  await loadTabData()
 }
 
 function pickPeriod(p: PeriodKey) {
@@ -258,7 +474,9 @@ async function loadTabData() {
     klineLoading.value = true
     try {
       const limit = tab.value === 'bigkline' ? 500 : 120
-      const rows = await fetchIndexKline(selected.value.code, '', '', PERIOD_MAP[period.value], limit)
+      const rows = selectedCustom.value
+        ? await fetchCustomIndexKline(selectedCustom.value.id, '', '', PERIOD_MAP[period.value], limit)
+        : await fetchIndexKline(selected.value.code, '', '', PERIOD_MAP[period.value], limit)
       const mapped = toKlinePoints(rows)
       if (tab.value === 'bigkline') bigPoints.value = mapped
       else points.value = mapped
@@ -307,7 +525,9 @@ const refreshCategory = computed<CollectCategory>(() =>
   tab.value === 'intraday' ? 'intraday' : 'indices'
 )
 async function onCollected() {
-  if (tab.value === 'intraday') {
+  if (selectedCustom.value) {
+    await refreshCustom()
+  } else if (tab.value === 'intraday') {
     await loadTrend()
   } else {
     await load()
@@ -317,6 +537,7 @@ async function onCollected() {
 
 onMounted(() => {
   load()
+  loadCustom()
   loadUsRate()
   loadUsdRate()
   loadCnRateOverlay()
@@ -333,6 +554,30 @@ onMounted(() => {
       </el-empty>
     </div>
 
+    <!-- 自定义指数：用户按股票组合与权重合成指数 -->
+    <div class="page-card">
+      <div class="custom-head">
+        <span class="group-title">自定义指数</span>
+        <el-button size="small" type="primary" @click="openCreate">新建自定义指数</el-button>
+      </div>
+      <div v-if="!customItems.length" class="custom-empty">
+        用自己的股票组合与权重合成指数：选择成分股 → 设置权重 → 查看走势与 K 线（基准点位默认 1000）
+      </div>
+      <div v-else class="index-grid">
+        <div v-for="ci in customItems" :key="ci.id"
+          class="index-cell" :class="{ active: selectedCustom?.id === ci.id }" @click="selectCustom(ci)">
+          <div class="cell-name" :title="ci.name">{{ ci.name }}</div>
+          <div class="cell-price" :class="pctClass(ci.changePct)">{{ ci.price.toFixed(2) }}</div>
+          <div class="cell-pct" :class="pctClass(ci.changePct)">{{ fmtPct(ci.changePct) }}</div>
+          <SparkLine :data="ci.trend" :up="ci.changePct >= 0" :height="26" />
+          <div class="cell-actions">
+            <span @click.stop="openEdit(ci)">编辑</span>
+            <span @click.stop="removeCustom(ci)">删除</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- A股宽基（置顶，先看指数概览再看详情） -->
     <div class="page-card" v-for="g in topGroups" :key="`top-${g.group}`">
       <IndexGroupCard :title="g.group" :items="g.list"
@@ -342,13 +587,14 @@ onMounted(() => {
     <!-- 选中指数详情：Tab 切换 行情K线 / 日K均线 / 大数据K线 / 股市矩阵 / 日内走势 -->
     <div class="page-card" v-if="selected">
       <div class="kline-head">
-        <h3>{{ selected.name }} <span class="code">{{ selected.code }}</span></h3>
+        <h3>{{ selected.name }} <span class="code">{{ selectedCustom ? '自定义指数' : selected.code }}</span></h3>
         <span class="price" :class="pctClass(selected.changePct)">{{ selected.price.toFixed(2) }}</span>
         <span :class="pctClass(selected.changePct)">{{ fmtPct(selected.changePct) }}</span>
         <span v-if="selected.amount" class="amount">成交 {{ selected.amount >= 10000 ? (selected.amount / 10000).toFixed(2) + ' 万亿' : selected.amount.toFixed(0) + ' 亿' }}</span>
         <span v-if="tab === 'quote'" class="range">{{ dateRange.start }} ~ {{ dateRange.end }}</span>
         <div style="flex: 1" />
-        <RefreshButton :category="refreshCategory" label="刷新数据" @done="onCollected" />
+        <el-button v-if="selectedCustom" size="small" :loading="klineLoading" @click="refreshCustom">重新计算</el-button>
+        <RefreshButton v-else :category="refreshCategory" label="刷新数据" @done="onCollected" />
         <div class="detail-tabs">
           <span v-for="t in tabs" :key="t.key"
             class="detail-tab" :class="{ active: tab === t.key }" @click="pickTab(t.key)">
@@ -357,10 +603,19 @@ onMounted(() => {
         </div>
       </div>
 
+      <!-- 自定义指数成分股与权重 -->
+      <div v-if="selectedCustom" class="ci-components">
+        <span class="ci-label">成分股</span>
+        <span v-for="c in selectedCustom.components" :key="c.symbol" class="ci-chip">
+          {{ c.name || c.symbol }} <em>{{ c.weight }}%</em>
+        </span>
+        <span class="ci-label">基准 {{ selectedCustom.baseValue }} 点</span>
+      </div>
+
       <!-- 行情K线 Tab：区间预设/自定义日期、K线·折线、美债叠加由图表工具栏提供 -->
       <div class="chart-toolbar" v-if="tab === 'quote'">
         <div class="period-tabs">
-          <span v-for="p in PERIOD_KEYS" :key="p"
+          <span v-for="p in periodKeys" :key="p"
             class="period-item" :class="{ active: quotePeriod === p }" @click="pickQuotePeriod(p)">
             {{ PERIOD_LABELS[p] }}
           </span>
@@ -371,7 +626,7 @@ onMounted(() => {
       <!-- K 线类 Tab 的周期切换 -->
       <div class="chart-toolbar" v-else-if="tab === 'kline' || tab === 'bigkline'">
         <div class="period-tabs">
-          <span v-for="p in PERIOD_KEYS" :key="p"
+          <span v-for="p in periodKeys" :key="p"
             class="period-item" :class="{ active: period === p }" @click="pickPeriod(p)">
             {{ PERIOD_LABELS[p] }}
           </span>
@@ -432,11 +687,13 @@ onMounted(() => {
           :key="`trend-${selected.code}-${trend.date}`"
           :data="trend" />
         <el-empty v-if="showEmpty" :image-size="60"
-          :description="tab === 'intraday'
-            ? '暂无分时数据（东财实时接口暂不可用或该指数不支持）'
-            : tab === 'quote'
-              ? '暂无行情数据（可调整区间或点击“刷新数据”）'
-              : '暂无数据'" />
+          :description="selectedCustom
+            ? '暂无合成数据（成分股日线数据采集中，稍后点击“重新计算”）'
+            : tab === 'intraday'
+              ? '暂无分时数据（东财实时接口暂不可用或该指数不支持）'
+              : tab === 'quote'
+                ? '暂无行情数据（可调整区间或点击“刷新数据”）'
+                : '暂无数据'" />
       </div>
     </div>
 
@@ -445,6 +702,49 @@ onMounted(() => {
       <IndexGroupCard :title="g.group" :items="g.list"
         :selected-code="selected?.code" @select="select" />
     </div>
+
+    <!-- 新建 / 编辑自定义指数 -->
+    <el-dialog v-model="customDialog" :title="editingId ? '编辑自定义指数' : '新建自定义指数'"
+      width="680px" :close-on-click-modal="false">
+      <div class="ci-form-row">
+        <span class="ci-form-label">指数名称</span>
+        <el-input v-model="formName" maxlength="40" show-word-limit
+          placeholder="如：我的核心资产组合" style="max-width: 340px" />
+      </div>
+      <div class="ci-form-row">
+        <span class="ci-form-label">基准点位</span>
+        <el-input-number v-model="formBaseValue" :min="1" :max="100000" :step="100" />
+        <span class="ci-hint">首日点位，默认 1000</span>
+      </div>
+      <div class="ci-rows-head">
+        <span class="ci-form-label">成分股与权重</span>
+        <div>
+          <el-button size="small" text @click="equalizeWeights">等权分配</el-button>
+          <el-button size="small" type="primary" plain @click="addRow">添加成分股</el-button>
+        </div>
+      </div>
+      <div v-for="(row, i) in formRows" :key="i" class="ci-row">
+        <el-select v-model="row.symbol" filterable remote
+          :remote-method="searchRowMethod(row)" :loading="row.loading"
+          placeholder="搜索股票代码 / 名称" style="flex: 1"
+          @change="onPickSymbol(row, $event)">
+          <el-option v-for="o in row.options" :key="o.symbol"
+            :label="`${o.name} ${o.symbol}`" :value="o.symbol" />
+        </el-select>
+        <el-input-number v-model="row.weight" :min="0.01" :max="10000" :precision="2"
+          :controls="false" style="width: 110px" />
+        <span class="ci-pct">%</span>
+        <el-button size="small" text type="danger" :disabled="formRows.length <= 1"
+          @click="removeRow(i)">删除</el-button>
+      </div>
+      <div class="ci-hint" v-if="formRows.length">
+        权重按合计归一化；最多 30 只成分股，权重须大于 0。保存后自动采集成分股日线，稍后可查看完整走势。
+      </div>
+      <template #footer>
+        <el-button @click="customDialog = false">取消</el-button>
+        <el-button type="primary" :loading="customSaving" @click="saveCustom">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -480,4 +780,39 @@ onMounted(() => {
 .period-item { padding: 4px 16px; cursor: pointer; font-size: 13px; color: #606266; background: #fff; user-select: none; }
 .period-item + .period-item { border-left: 1px solid #dcdfe6; }
 .period-item.active { background: #409eff; color: #fff; }
+
+/* 自定义指数：卡片与编辑弹窗 */
+.custom-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.group-title { font-size: 14px; font-weight: 600; color: #606266; }
+.custom-empty { color: #909399; font-size: 13px; }
+.index-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+.index-cell {
+  position: relative; border: 1px solid #ebeef5; border-radius: 6px; padding: 6px 7px;
+  cursor: pointer; transition: all 0.15s;
+}
+.index-cell:hover { border-color: #409eff; }
+.index-cell.active { border-color: #409eff; background: #ecf5ff; }
+.cell-name { font-size: 11px; color: #606266; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cell-price { font-size: 13px; font-weight: 600; line-height: 1.25; }
+.cell-pct { font-size: 11px; font-weight: 600; line-height: 1.3; }
+.cell-actions {
+  display: none; position: absolute; right: 4px; top: 3px; gap: 6px;
+  font-size: 11px; background: rgba(255, 255, 255, 0.92); padding: 0 2px; border-radius: 4px;
+}
+.cell-actions span { color: #409eff; cursor: pointer; }
+.cell-actions span:hover { text-decoration: underline; }
+.index-cell:hover .cell-actions { display: flex; }
+.ci-components { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: -2px 0 10px; }
+.ci-label { color: #909399; font-size: 12px; }
+.ci-chip {
+  font-size: 12px; color: #606266; background: #f5f7fa;
+  border: 1px solid #ebeef5; border-radius: 4px; padding: 1px 6px;
+}
+.ci-chip em { font-style: normal; color: #409eff; margin-left: 2px; }
+.ci-form-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.ci-form-label { width: 80px; color: #606266; font-size: 13px; }
+.ci-rows-head { display: flex; align-items: center; justify-content: space-between; margin: 4px 0 8px; }
+.ci-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.ci-pct { color: #909399; font-size: 12px; }
+.ci-hint { color: #909399; font-size: 12px; }
 </style>

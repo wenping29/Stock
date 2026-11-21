@@ -606,11 +606,12 @@ public class CollectorService(
         }
     }
 
-    /// <summary>所有用户自选 ∪ 配置中的示例标的。</summary>
+    /// <summary>所有用户自选 ∪ 自定义指数成分股 ∪ 配置中的示例标的。</summary>
     private string[] GetAllSymbols()
     {
         var watchlist = db.WatchlistItems.Select(x => x.Symbol).Distinct().ToList();
-        return watchlist.Union(GetSampleSymbols()).Distinct().ToArray();
+        var customIndex = db.CustomIndexComponents.Select(x => x.Symbol).Distinct().ToList();
+        return watchlist.Union(customIndex).Union(GetSampleSymbols()).Distinct().ToArray();
     }
 
     private string[] GetSampleSymbols()

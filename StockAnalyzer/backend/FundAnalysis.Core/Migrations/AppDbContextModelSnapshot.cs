@@ -215,6 +215,67 @@ namespace FundAnalysis.Migrations
                     b.ToTable("BacktestTradeRecords");
                 });
 
+            modelBuilder.Entity("FundAnalysis.Models.CustomIndex", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<double>("BaseValue")
+                        .HasColumnType("double precision");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("CustomIndices");
+                });
+
+            modelBuilder.Entity("FundAnalysis.Models.CustomIndexComponent", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("CustomIndexId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("Symbol")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)");
+
+                    b.Property<double>("Weight")
+                        .HasColumnType("double precision");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomIndexId");
+
+                    b.ToTable("CustomIndexComponents");
+                });
+
             modelBuilder.Entity("FundAnalysis.Models.FundHolding", b =>
                 {
                     b.Property<string>("FundCode")
@@ -1267,6 +1328,17 @@ namespace FundAnalysis.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("FundAnalysis.Models.CustomIndexComponent", b =>
+                {
+                    b.HasOne("FundAnalysis.Models.CustomIndex", "CustomIndex")
+                        .WithMany("Components")
+                        .HasForeignKey("CustomIndexId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CustomIndex");
+                });
+
             modelBuilder.Entity("FundAnalysis.Models.WatchlistItem", b =>
                 {
                     b.HasOne("FundAnalysis.Models.AppUser", "User")
@@ -1332,6 +1404,11 @@ namespace FundAnalysis.Migrations
             modelBuilder.Entity("FundAnalysis.Models.BacktestRecord", b =>
                 {
                     b.Navigation("Trades");
+                });
+
+            modelBuilder.Entity("FundAnalysis.Models.CustomIndex", b =>
+                {
+                    b.Navigation("Components");
                 });
 #pragma warning restore 612, 618
         }

@@ -230,6 +230,25 @@ export interface IndicesData {
   items: IndexItem[]
 }
 
+/** 自定义指数成分股（weight 为相对权重，合成时按合计归一化）。 */
+export interface CustomIndexComponent {
+  symbol: string
+  name: string
+  weight: number
+}
+
+/** 自定义指数清单项：最新点位 + 近 30 个交易日点位走势。 */
+export interface CustomIndexItem {
+  id: number
+  name: string
+  baseValue: number
+  createdAt: string
+  components: CustomIndexComponent[]
+  price: number
+  changePct: number
+  trend: number[]
+}
+
 /** 指数日内分时点。time 为 HH:mm；avg 为当日累计均价；volume 单位：手。 */
 export interface IndexTrendPoint {
   time: string

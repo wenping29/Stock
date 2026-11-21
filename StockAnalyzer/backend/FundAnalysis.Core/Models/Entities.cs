@@ -297,6 +297,34 @@ public class StockFinancialReport
     public DateTime UpdatedAt { get; set; } = DateTime.Now;
 }
 
+/// <summary>
+/// 用户自定义指数：挑选若干股票并按权重合成指数点位（基准点位默认 1000）。
+/// 由成分股日线按"价格相对值加权"计算，不落库行情，查询时即时合成。
+/// </summary>
+public class CustomIndex
+{
+    public long Id { get; set; }
+    public string UserId { get; set; } = "";
+    public string Name { get; set; } = "";
+    /// <summary>基准点位（指数首日取值，默认 1000）。</summary>
+    public double BaseValue { get; set; } = 1000;
+    public DateTime CreatedAt { get; set; } = DateTime.Now;
+
+    public List<CustomIndexComponent> Components { get; set; } = [];
+}
+
+/// <summary>自定义指数成分股与权重（Weight 为相对权重，合成时按合计归一化）。</summary>
+public class CustomIndexComponent
+{
+    public long Id { get; set; }
+    public long CustomIndexId { get; set; }
+    public string Symbol { get; set; } = "";
+    public string Name { get; set; } = "";
+    public double Weight { get; set; }
+
+    public CustomIndex? CustomIndex { get; set; }
+}
+
 /// <summary>自选价格提醒规则。</summary>
 public class AlertRule
 {

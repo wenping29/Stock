@@ -138,6 +138,23 @@ public record IndexTrendPointDto(string Time, double Price, double Volume, doubl
 /// </summary>
 public record IndexTrendResponse(string Code, string Name, string Date, double PrevClose, List<IndexTrendPointDto> Points);
 
+// ---------- 自定义指数 ----------
+
+/// <summary>自定义指数成分股。</summary>
+public record CustomIndexComponentDto(string Symbol, string Name, double Weight);
+
+/// <summary>自定义指数清单项：最新点位/涨跌幅 + 近 30 日点位迷你走势。</summary>
+public record CustomIndexItemDto(
+    long Id, string Name, double BaseValue, DateTime CreatedAt,
+    List<CustomIndexComponentDto> Components,
+    double Price, double ChangePct, List<double> Trend);
+
+/// <summary>保存自定义指数（新增 / 编辑共用）。Weight 为相对权重，服务端按合计归一化。</summary>
+public record CustomIndexSaveRequest(
+    string Name, double? BaseValue, List<CustomIndexComponentInput> Components);
+
+public record CustomIndexComponentInput(string Symbol, string? Name, double Weight);
+
 /// <summary>
 /// 手动采集作业（前端"刷新"触发）。State 取 Hangfire 作业状态：
 /// Enqueued / Processing / Succeeded / Failed / Scheduled 等。

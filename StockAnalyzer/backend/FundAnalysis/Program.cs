@@ -139,6 +139,7 @@ builder.Services.AddScoped<FinancialReportService>();
 builder.Services.AddScoped<FundService>();
 builder.Services.AddScoped<FundEstimateService>();
 builder.Services.AddScoped<AlertService>();
+builder.Services.AddScoped<CustomIndexService>();
 builder.Services.AddScoped<MarketSentimentService>();
 builder.Services.AddScoped<TokenService>();
 

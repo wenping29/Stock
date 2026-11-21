@@ -30,6 +30,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
     public DbSet<StockFundamental> StockFundamentals => Set<StockFundamental>();
     public DbSet<StockFinancialReport> StockFinancialReports => Set<StockFinancialReport>();
     public DbSet<AlertRule> AlertRules => Set<AlertRule>();
+    public DbSet<CustomIndex> CustomIndices => Set<CustomIndex>();
+    public DbSet<CustomIndexComponent> CustomIndexComponents => Set<CustomIndexComponent>();
     public DbSet<MarketIndicator> MarketIndicators => Set<MarketIndicator>();
     public DbSet<IndexIntraday> IndexIntradays => Set<IndexIntraday>();
     public DbSet<MarketSentimentDaily> MarketSentimentDailies => Set<MarketSentimentDaily>();
@@ -164,6 +166,21 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
         {
             e.HasIndex(x => x.UserId);
             e.HasIndex(x => new { x.UserId, x.Symbol });
+        });
+
+        b.Entity<CustomIndex>(e =>
+        {
+            e.HasIndex(x => x.UserId);
+            e.Property(x => x.Name).HasMaxLength(40);
+            e.HasMany(x => x.Components).WithOne(x => x.CustomIndex)
+                .HasForeignKey(x => x.CustomIndexId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<CustomIndexComponent>(e =>
+        {
+            e.HasIndex(x => x.CustomIndexId);
+            e.Property(x => x.Symbol).HasMaxLength(12);
+            e.Property(x => x.Name).HasMaxLength(40);
         });
 
         b.Entity<MarketIndicator>(e =>
