@@ -271,6 +271,65 @@ public class QuoteController(
     }
 
     /// <summary>
+    /// 指数关联的场内 ETF：按关键词在 StockBasic（采集器同步的全市场 ETF 清单）中匹配名称，
+    /// 批量拉取实时行情（与基金估值共用行情源，源不可用时只返回代码/名称），结果缓存 1 分钟。
+    /// </summary>
+    [Authorize]
+    [HttpGet("index-etfs")]
+    public async Task<IActionResult> IndexEtfs([FromQuery] string code)
+    {
+        if (string.IsNullOrWhiteSpace(code) || !MarketIndices.EtfKeywords.TryGetValue(code, out var keywords))
+            return Ok(Array.Empty<IndexEtfItemDto>());
+
+        var cacheKey = $"index-etfs-{code}";
+        if (cache.TryGetValue(cacheKey, out List<IndexEtfItemDto>? cached) && cached is not null)
+            return Ok(cached);
+
+        var etfs = await db.StockBasics.AsNoTracking()
+            .Where(x => x.Type == SymbolTypes.Etf)
+            .Select(x => new { x.Symbol, x.Name, x.SecMarket })
+            .ToListAsync();
+
+        // 名称越短越可能是该指数的代表 ETF，最多展示 12 只
+        var matched = etfs
+            .Where(x => keywords.Any(k => x.Name.Contains(k)))
+            .OrderBy(x => x.Name.Length).ThenBy(x => x.Symbol)
+            .Take(12)
+            .ToList();
+
+        var quotes = new Dictionary<string, RealtimeQuote>();
+        if (matched.Count > 0)
+        {
+            try
+            {
+                var batch = await provider.FetchRealtimeQuotesAsync(
+                    matched.Select(x => (x.Symbol, x.SecMarket)).ToList());
+                quotes = batch.Quotes;
+            }
+            catch (OperationCanceledException) when (HttpContext.RequestAborted.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "指数 {Code} 关联 ETF 实时行情拉取失败，仅返回代码/名称", code);
+            }
+        }
+
+        var result = matched.Select(x =>
+        {
+            quotes.TryGetValue($"{x.SecMarket}.{x.Symbol}", out var q);
+            return new IndexEtfItemDto(
+                x.Symbol, x.Name,
+                q is null ? null : Math.Round(q.Price, 3),
+                q is null ? null : Math.Round(q.ChangePct, 2));
+        }).ToList();
+
+        cache.Set(cacheKey, result, TimeSpan.FromMinutes(1));
+        return Ok(result);
+    }
+
+    /// <summary>
     /// 沪深港通资金（北上/南下）：北向成交额（净流入 2024-08 起停止披露）、南向净流入/流出，近 N 日趋势。
     /// </summary>
     [Authorize]

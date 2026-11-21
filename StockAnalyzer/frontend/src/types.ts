@@ -224,6 +224,16 @@ export interface IndexItem {
   trend: number[]
   /** 主力净流入（元，仅行业指数有值） */
   mainInflow?: number | null
+  /** 是否为用户自定义指数（卡片右上角显示标识，并支持编辑/删除） */
+  custom?: boolean
+}
+
+/** 指数关联的场内 ETF；行情源不可用时 price/changePct 为 null。 */
+export interface IndexEtf {
+  symbol: string
+  name: string
+  price: number | null
+  changePct: number | null
 }
 
 export interface IndicesData {

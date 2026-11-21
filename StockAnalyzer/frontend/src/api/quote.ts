@@ -2,7 +2,7 @@ import http from './http'
 import type {
   SearchItem, KLineResponse, PerformanceData, MoneyFlowData, WatchlistItem, AdminUser,
   MarketIndex, MarketVolume, HsgtFlow, FxRate, Us10y, CnBond, IndexItem, IndexTrendData, SectorFlow,
-  MarketVolumeToday,
+  MarketVolumeToday, IndexEtf,
 } from '../types'
 
 export async function fetchMarketOverview(): Promise<MarketIndex[]> {
@@ -63,6 +63,12 @@ export async function fetchIndices(scope?: 'overview'): Promise<IndexItem[]> {
 /** 指数日内分时走势（东财实时，后端按指数缓存 1 分钟）。 */
 export async function fetchIndexTrend(code: string): Promise<IndexTrendData> {
   const { data } = await http.get('/quote/index-trend', { params: { code } })
+  return data
+}
+
+/** 指数关联的场内 ETF（后端按指数缓存 1 分钟）。 */
+export async function fetchIndexEtfs(code: string): Promise<IndexEtf[]> {
+  const { data } = await http.get('/quote/index-etfs', { params: { code } })
   return data
 }
 

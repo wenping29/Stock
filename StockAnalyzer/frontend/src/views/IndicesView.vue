@@ -2,8 +2,8 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { CustomIndexItem, CustomIndexPreset, IndexItem, IndexTrendData, KLinePoint } from '../types'
-import { fetchIndices, fetchIndexTrend } from '../api/quote'
+import type { CustomIndexItem, CustomIndexPreset, IndexEtf, IndexItem, IndexTrendData, KLinePoint } from '../types'
+import { fetchIndexEtfs, fetchIndices, fetchIndexTrend } from '../api/quote'
 import {
   createCustomIndex, deleteCustomIndex, fetchCustomIndexPreset, fetchCustomIndexPresets,
   fetchCustomIndices, fetchCustomIndexKline, updateCustomIndex,
@@ -17,7 +17,6 @@ import type { IndicatorResult, KlineData, KlinePeriod, StockInfo } from '../type
 import type { CollectCategory } from '../api/collect'
 import RefreshButton from '../components/RefreshButton.vue'
 import IndexGroupCard from '../components/IndexGroupCard.vue'
-import SparkLine from '../components/SparkLine.vue'
 import StockChart from '../components/analysis/StockChart.vue'
 import IndicatorChart from '../components/analysis/IndicatorChart.vue'
 import KLineChart from '../components/KLineChart.vue'
@@ -301,6 +300,11 @@ const groups = computed(() => {
     if (!map.has(it.group)) map.set(it.group, [])
     map.get(it.group)!.push(it)
   }
+  // 自定义指数并入 A股宽基统一展示，卡片右上角打“自定义”标识
+  if (customItems.value.length) {
+    if (!map.has('A股宽基')) map.set('A股宽基', [])
+    map.get('A股宽基')!.push(...customItems.value.map(customToIndexItem))
+  }
   return [...map.entries()].map(([group, list]) => ({ group, list }))
 })
 
@@ -363,25 +367,71 @@ function select(item: IndexItem) {
   if (!selectedCustom.value && selected.value?.code === item.code) return
   selectedCustom.value = null
   selected.value = item
+  loadEtfs(item.code)
   loadTabData()
+}
+
+// ---- 指数关联的场内 ETF（仅公开指数，后端按指数缓存 1 分钟） ----
+const etfs = ref<IndexEtf[]>([])
+let etfSeq = 0
+async function loadEtfs(code: string) {
+  const seq = ++etfSeq
+  try {
+    const rows = await fetchIndexEtfs(code)
+    if (seq === etfSeq) etfs.value = rows
+  } catch {
+    if (seq === etfSeq) etfs.value = []
+  }
+}
+
+/** 自定义指数映射为 IndexItem，与公开指数合并展示（custom 标记用于卡片右上角标识）。 */
+function customToIndexItem(ci: CustomIndexItem): IndexItem {
+  return {
+    code: `CI${ci.id}`,
+    name: ci.name,
+    group: 'A股宽基',
+    price: ci.price,
+    changePct: ci.changePct,
+    amount: 0,
+    trend: ci.trend,
+    custom: true,
+  }
 }
 
 /** 选中自定义指数：映射为 IndexItem 复用卡片/详情结构。 */
 function selectCustom(ci: CustomIndexItem) {
   selectedCustom.value = ci
-  selected.value = {
-    code: `CI${ci.id}`,
-    name: ci.name,
-    group: '自定义指数',
-    price: ci.price,
-    changePct: ci.changePct,
-    amount: 0,
-    trend: ci.trend,
-  }
+  selected.value = customToIndexItem(ci)
+  etfs.value = []
+  etfSeq++
   if (tab.value === 'intraday') tab.value = 'quote'
   if (quotePeriod.value === '60min') quotePeriod.value = 'day'
   if (period.value === '60min') period.value = 'day'
   loadTabData()
+}
+
+/** 统一卡片点击：自定义指数走自定义详情，公开指数走内置详情。 */
+function onSelectIndex(item: IndexItem) {
+  if (item.custom) {
+    const ci = customItems.value.find((c) => `CI${c.id}` === item.code)
+    if (ci) selectCustom(ci)
+    return
+  }
+  select(item)
+}
+
+function customByCode(code: string) {
+  return customItems.value.find((c) => `CI${c.id}` === code) ?? null
+}
+
+function editCustomCard(item: IndexItem) {
+  const ci = customByCode(item.code)
+  if (ci) openEdit(ci)
+}
+
+function removeCustomCard(item: IndexItem) {
+  const ci = customByCode(item.code)
+  if (ci) removeCustom(ci)
 }
 
 // ---- 自定义指数：新建 / 编辑 / 删除 ----
@@ -671,37 +721,15 @@ onMounted(() => {
       </el-empty>
     </div>
 
-    <!-- 自定义指数与 A股宽基同排展示，节省纵向空间 -->
-    <div class="top-row">
-      <!-- 自定义指数：用户按股票组合与权重合成指数 -->
-      <div class="page-card top-custom">
-        <div class="custom-head">
-          <span class="group-title">自定义指数</span>
+    <!-- A股宽基（置顶，自定义指数合并展示：卡片右上角带“自定义”标识） -->
+    <div class="page-card" v-for="g in topGroups" :key="`top-${g.group}`">
+      <IndexGroupCard :title="g.group" :items="g.list"
+        :selected-code="selected?.code" @select="onSelectIndex"
+        @edit="editCustomCard" @remove="removeCustomCard">
+        <template #extra>
           <el-button size="small" type="primary" @click="openCreate">新建自定义指数</el-button>
-        </div>
-        <div v-if="!customItems.length" class="custom-empty">
-          用自己的股票组合与权重合成指数：选择成分股 → 设置权重 → 查看走势与 K 线（基准点位默认 1000）
-        </div>
-        <div v-else class="index-grid">
-          <div v-for="ci in customItems" :key="ci.id"
-            class="index-cell" :class="{ active: selectedCustom?.id === ci.id }" @click="selectCustom(ci)">
-            <div class="cell-name" :title="ci.name">{{ ci.name }}</div>
-            <div class="cell-price" :class="pctClass(ci.changePct)">{{ ci.price.toFixed(2) }}</div>
-            <div class="cell-pct" :class="pctClass(ci.changePct)">{{ fmtPct(ci.changePct) }}</div>
-            <SparkLine :data="ci.trend" :up="ci.changePct >= 0" :height="26" />
-            <div class="cell-actions">
-              <span @click.stop="openEdit(ci)">编辑</span>
-              <span @click.stop="removeCustom(ci)">删除</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- A股宽基（置顶，先看指数概览再看详情） -->
-      <div class="page-card top-broad" v-for="g in topGroups" :key="`top-${g.group}`">
-        <IndexGroupCard :title="g.group" :items="g.list"
-          :selected-code="selected?.code" @select="select" />
-      </div>
+        </template>
+      </IndexGroupCard>
     </div>
 
     <!-- 选中指数详情：Tab 切换 行情K线 / 日K均线 / 大数据K线 / 股市矩阵 / 日内走势 -->
@@ -730,6 +758,17 @@ onMounted(() => {
           {{ c.name || c.symbol }} <em>{{ c.weight }}%</em>
         </span>
         <span class="ci-label">基准 {{ selectedCustom.baseValue }} 点</span>
+      </div>
+
+      <!-- 指数关联的场内 ETF -->
+      <div v-if="!selectedCustom && etfs.length" class="ci-components">
+        <span class="ci-label">相关ETF</span>
+        <span v-for="e in etfs" :key="e.symbol" class="etf-chip">
+          <span class="etf-name">{{ e.name }}</span>
+          <em>{{ e.symbol }}</em>
+          <b v-if="e.price !== null">{{ e.price.toFixed(3) }}</b>
+          <span v-if="e.changePct !== null" :class="pctClass(e.changePct)">{{ fmtPct(e.changePct) }}</span>
+        </span>
       </div>
 
       <!-- 行情K线 Tab：区间预设/自定义日期、K线·折线、美债叠加由图表工具栏提供 -->
@@ -960,31 +999,7 @@ onMounted(() => {
 .period-item + .period-item { border-left: 1px solid #dcdfe6; }
 .period-item.active { background: #409eff; color: #fff; }
 
-/* 自定义指数：卡片与编辑弹窗 */
-/* 顶部同排：自定义指数 + A股宽基，节省纵向空间 */
-.top-row { display: flex; gap: 16px; align-items: stretch; flex-wrap: wrap; }
-.top-custom { flex: 0 1 360px; min-width: 300px; }
-.top-broad { flex: 1 1 620px; min-width: 0; }
-.custom-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-.group-title { font-size: 14px; font-weight: 600; color: #606266; }
-.custom-empty { color: #909399; font-size: 13px; }
-.index-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
-.index-cell {
-  position: relative; border: 1px solid #ebeef5; border-radius: 6px; padding: 6px 7px;
-  cursor: pointer; transition: all 0.15s;
-}
-.index-cell:hover { border-color: #409eff; }
-.index-cell.active { border-color: #409eff; background: #ecf5ff; }
-.cell-name { font-size: 11px; color: #606266; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cell-price { font-size: 13px; font-weight: 600; line-height: 1.25; }
-.cell-pct { font-size: 11px; font-weight: 600; line-height: 1.3; }
-.cell-actions {
-  display: none; position: absolute; right: 4px; top: 3px; gap: 6px;
-  font-size: 11px; background: rgba(255, 255, 255, 0.92); padding: 0 2px; border-radius: 4px;
-}
-.cell-actions span { color: #409eff; cursor: pointer; }
-.cell-actions span:hover { text-decoration: underline; }
-.index-cell:hover .cell-actions { display: flex; }
+/* 自定义指数：详情成分股与编辑弹窗 */
 .ci-components { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: -2px 0 10px; }
 .ci-label { color: #909399; font-size: 12px; }
 .ci-chip {
@@ -992,6 +1007,13 @@ onMounted(() => {
   border: 1px solid #ebeef5; border-radius: 4px; padding: 1px 6px;
 }
 .ci-chip em { font-style: normal; color: #409eff; margin-left: 2px; }
+.etf-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; color: #606266; background: #f5f7fa;
+  border: 1px solid #ebeef5; border-radius: 4px; padding: 1px 6px;
+}
+.etf-chip em { font-style: normal; color: #909399; }
+.etf-chip b { font-weight: 600; }
 .ci-form-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
 .ci-form-label { width: 80px; color: #606266; font-size: 13px; }
 .ci-rows-head { display: flex; align-items: center; justify-content: space-between; margin: 4px 0 8px; }
