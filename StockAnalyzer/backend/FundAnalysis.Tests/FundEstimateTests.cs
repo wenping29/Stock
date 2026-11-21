@@ -277,6 +277,10 @@ public class FundEstimateTests : IDisposable
             => Task.FromResult(new RealtimeQuoteBatch(
                 new Dictionary<string, RealtimeQuote>(Quotes), Source));
 
+        public Task<QuoteDetail?> FetchQuoteDetailAsync(
+            string symbol, int secMarket, CancellationToken ct = default)
+            => Task.FromResult<QuoteDetail?>(null);
+
         public Task<List<StockBasic>> FetchSuggestAsync(string keyword, CancellationToken ct = default)
             => Task.FromResult(new List<StockBasic>());
 

@@ -386,6 +386,46 @@ public class EastmoneyProvider(IHttpClientFactory factory) : IQuoteProvider
             fallback, anySucceeded ? QuoteSourceNames.Tencent : QuoteSourceNames.None);
     }
 
+    /// <summary>东财 push2 单只标的行情明细（stock/get）；接口失败或停牌时返回 null。</summary>
+    public async Task<QuoteDetail?> FetchQuoteDetailAsync(
+        string symbol, int secMarket, CancellationToken ct = default)
+    {
+        try
+        {
+            using var client = NewClient();
+            var url = "https://push2.eastmoney.com/api/qt/stock/get?fltt=2&invt=2" +
+                      "&fields=f43,f44,f45,f46,f47,f48,f50,f60,f168,f169,f170,f171" +
+                      $"&secid={secMarket}.{symbol}";
+            using var doc = JsonDocument.Parse(await GetWithRetryAsync(client, url, ct));
+            if (!doc.RootElement.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Object)
+                return null;
+
+            var price = GetNum(data, "f43");
+            if (price <= 0) return null; // 停牌 / 未上市 / 风控返回 "-"
+            return new QuoteDetail(
+                price,
+                GetNum(data, "f60"),
+                GetNum(data, "f46"),
+                GetNum(data, "f44"),
+                GetNum(data, "f45"),
+                GetNum(data, "f169"),
+                GetNum(data, "f170"),
+                GetNum(data, "f47"),
+                GetNum(data, "f48"),
+                GetNum(data, "f168"),
+                GetNum(data, "f50"),
+                GetNum(data, "f171"));
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
     /// <summary>东财 push2 批量行情；任一请求失败返回 null，由调用方切换备用源。</summary>
     private async Task<Dictionary<string, RealtimeQuote>?> TryEastmoneyQuotesAsync(
         List<(string Symbol, int SecMarket)> pairs, CancellationToken ct)
@@ -397,7 +437,7 @@ public class EastmoneyProvider(IHttpClientFactory factory) : IQuoteProvider
         {
             foreach (var chunk in secids.Chunk(50))
             {
-                var url = $"https://push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&invt=2&fields=f2,f3,f12,f13&secids={string.Join(",", chunk)}";
+                var url = $"https://push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&invt=2&fields=f2,f3,f6,f12,f13&secids={string.Join(",", chunk)}";
                 using var client = NewClient();
                 using var doc = JsonDocument.Parse(await GetWithRetryAsync(client, url, ct));
                 if (!doc.RootElement.TryGetProperty("data", out var data) || data.ValueKind == JsonValueKind.Null)
@@ -416,7 +456,11 @@ public class EastmoneyProvider(IHttpClientFactory factory) : IQuoteProvider
                     var changePct = row.TryGetProperty("f3", out var f3) && f3.ValueKind == JsonValueKind.Number
                         ? f3.GetDouble()
                         : 0;
-                    result[$"{market}.{code}"] = new RealtimeQuote(price, changePct);
+                    // f6 = 成交额（元），用于 ETF 资金热力图面积
+                    var amount = row.TryGetProperty("f6", out var f6) && f6.ValueKind == JsonValueKind.Number
+                        ? f6.GetDouble()
+                        : 0;
+                    result[$"{market}.{code}"] = new RealtimeQuote(price, changePct, amount);
                 }
             }
             // 东财风控时偶发 200 + data:null，按失败处理交给备用源

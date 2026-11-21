@@ -138,8 +138,15 @@ public record IndexTrendPointDto(string Time, double Price, double Volume, doubl
 /// </summary>
 public record IndexTrendResponse(string Code, string Name, string Date, double PrevClose, List<IndexTrendPointDto> Points);
 
-/// <summary>指数关联的场内 ETF；行情源不可用时 Price/ChangePct 为 null。</summary>
-public record IndexEtfItemDto(string Symbol, string Name, double? Price, double? ChangePct);
+/// <summary>指数关联的场内 ETF；行情源不可用时 Price/ChangePct 为 null，Amount（成交额，元）为 0。</summary>
+public record IndexEtfItemDto(string Symbol, string Name, double? Price, double? ChangePct, double Amount);
+
+/// <summary>ETF 实时行情明细（Volume 单位手，Amount 单位元，换手率/量比/振幅单位 %）。</summary>
+public record EtfQuoteDto(
+    string Symbol, string Name, string? Industry,
+    double? Price, double? PrevClose, double? Open, double? High, double? Low,
+    double? Change, double? ChangePct, double? Volume, double? Amount,
+    double? TurnoverRate, double? VolumeRatio, double? Amplitude);
 
 // ---------- 自定义指数 ----------
 

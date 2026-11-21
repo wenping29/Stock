@@ -2,7 +2,7 @@ import http from './http'
 import type {
   SearchItem, KLineResponse, PerformanceData, MoneyFlowData, WatchlistItem, AdminUser,
   MarketIndex, MarketVolume, HsgtFlow, FxRate, Us10y, CnBond, IndexItem, IndexTrendData, SectorFlow,
-  MarketVolumeToday, IndexEtf,
+  MarketVolumeToday, IndexEtf, EtfQuote, IndexTrendPoint,
 } from '../types'
 
 export async function fetchMarketOverview(): Promise<MarketIndex[]> {
@@ -69,6 +69,18 @@ export async function fetchIndexTrend(code: string): Promise<IndexTrendData> {
 /** 指数关联的场内 ETF（后端按指数缓存 1 分钟）。 */
 export async function fetchIndexEtfs(code: string): Promise<IndexEtf[]> {
   const { data } = await http.get('/quote/index-etfs', { params: { code } })
+  return data
+}
+
+/** ETF 实时行情明细（现价/成交量额/换手率/量比/振幅）。 */
+export async function fetchEtfQuote(symbol: string): Promise<EtfQuote> {
+  const { data } = await http.get('/quote/etf-quote', { params: { symbol } })
+  return data
+}
+
+/** ETF 当日分时（分钟价格与成交量，后端缓存 1 分钟）。 */
+export async function fetchEtfTrend(symbol: string): Promise<IndexTrendPoint[]> {
+  const { data } = await http.get('/quote/etf-trend', { params: { symbol } })
   return data
 }
 

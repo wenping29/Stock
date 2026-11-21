@@ -322,9 +322,73 @@ public class QuoteController(
             return new IndexEtfItemDto(
                 x.Symbol, x.Name,
                 q is null ? null : Math.Round(q.Price, 3),
-                q is null ? null : Math.Round(q.ChangePct, 2));
+                q is null ? null : Math.Round(q.ChangePct, 2),
+                q is null ? 0 : Math.Round(q.Amount, 0));
         }).ToList();
 
+        cache.Set(cacheKey, result, TimeSpan.FromMinutes(1));
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// ETF 实时行情明细（现价/今开/最高/最低/成交量额/换手率/量比/振幅），
+    /// 供指数页"关联 ETF"弹窗使用；行情源不可用时明细字段为 null。
+    /// </summary>
+    [Authorize]
+    [HttpGet("etf-quote")]
+    public async Task<IActionResult> EtfQuote([FromQuery] string symbol)
+    {
+        if (string.IsNullOrWhiteSpace(symbol))
+            return BadRequest(new { message = "缺少 symbol" });
+
+        var basic = await db.StockBasics.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Symbol == symbol && x.Type == SymbolTypes.Etf);
+        if (basic is null)
+            return NotFound(new { message = "未找到该 ETF" });
+
+        var d = await provider.FetchQuoteDetailAsync(symbol, basic.SecMarket, HttpContext.RequestAborted);
+        return Ok(new EtfQuoteDto(
+            basic.Symbol, basic.Name, basic.Industry,
+            d?.Price, d?.PrevClose, d?.Open, d?.High, d?.Low,
+            d?.Change, d?.ChangePct, d?.Volume, d?.Amount,
+            d?.TurnoverRate, d?.VolumeRatio, d?.Amplitude));
+    }
+
+    /// <summary>ETF 当日分时（trends2 实时拉取，缓存 1 分钟），供关联 ETF 弹窗绘制分时成交量。</summary>
+    [Authorize]
+    [HttpGet("etf-trend")]
+    public async Task<IActionResult> EtfTrend([FromQuery] string symbol)
+    {
+        if (string.IsNullOrWhiteSpace(symbol))
+            return BadRequest(new { message = "缺少 symbol" });
+
+        var cacheKey = $"etf-trend-{symbol}";
+        if (cache.TryGetValue(cacheKey, out List<IndexTrendPointDto>? cached) && cached is not null)
+            return Ok(cached);
+
+        var basic = await db.StockBasics.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Symbol == symbol && x.Type == SymbolTypes.Etf);
+        if (basic is null)
+            return NotFound(new { message = "未找到该 ETF" });
+
+        List<TrendPoint> trend;
+        try
+        {
+            trend = await provider.FetchTrendAsync(symbol, basic.SecMarket, HttpContext.RequestAborted);
+        }
+        catch (OperationCanceledException) when (HttpContext.RequestAborted.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "ETF {Symbol} 分时拉取失败，返回空数据", symbol);
+            trend = [];
+        }
+
+        var result = trend
+            .Select(t => new IndexTrendPointDto(t.Time.ToString("HH:mm"), t.Price, t.Volume, t.Avg))
+            .ToList();
         cache.Set(cacheKey, result, TimeSpan.FromMinutes(1));
         return Ok(result);
     }

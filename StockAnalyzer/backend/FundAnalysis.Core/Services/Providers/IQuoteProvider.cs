@@ -25,8 +25,17 @@ public record FundHoldingItem(int Rank, string Symbol, string Name, int SecMarke
 /// <summary>基金重仓股快照：ReportDate 为季报截止日（上游未返回时为 null）。</summary>
 public record FundHoldingsSnapshot(DateTime? ReportDate, List<FundHoldingItem> Items);
 
-/// <summary>实时行情快照：最新价与当日涨跌幅（%）。</summary>
-public record RealtimeQuote(double Price, double ChangePct);
+/// <summary>实时行情快照：最新价与当日涨跌幅（%）；Amount 为成交额（元，备用源可能为 0）。</summary>
+public record RealtimeQuote(double Price, double ChangePct, double Amount = 0);
+
+/// <summary>
+/// 单只标的实时行情明细。Volume 单位手，Amount 单位元，
+/// TurnoverRate（换手率）/VolumeRatio（量比）/Amplitude（振幅）单位 %。
+/// </summary>
+public record QuoteDetail(
+    double Price, double PrevClose, double Open, double High, double Low,
+    double Change, double ChangePct,
+    double Volume, double Amount, double TurnoverRate, double VolumeRatio, double Amplitude);
 
 /// <summary>批量实时行情 + 实际生效的数据源。键为 "市场.代码"（与 FundHoldingItem.SecId 一致）。</summary>
 public record RealtimeQuoteBatch(Dictionary<string, RealtimeQuote> Quotes, string Source);
@@ -75,4 +84,7 @@ public interface IQuoteProvider
 
     /// <summary>批量拉取实时行情（最新价/涨跌幅），并返回实际使用的数据源（东财 / 备用源）。</summary>
     Task<RealtimeQuoteBatch> FetchRealtimeQuotesAsync(IReadOnlyCollection<(string Symbol, int SecMarket)> items, CancellationToken ct = default);
+
+    /// <summary>单只标的实时行情明细（现价/今开/最高/最低/成交量额/换手率/量比/振幅）；源不可用时返回 null。</summary>
+    Task<QuoteDetail?> FetchQuoteDetailAsync(string symbol, int secMarket, CancellationToken ct = default);
 }

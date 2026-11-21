@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { CustomIndexItem, CustomIndexPreset, IndexEtf, IndexItem, IndexTrendData, KLinePoint } from '../types'
-import { fetchIndexEtfs, fetchIndices, fetchIndexTrend } from '../api/quote'
+import type { CustomIndexItem, CustomIndexPreset, EtfQuote, FundEstimate, FundHoldingItem, IndexEtf, IndexItem, IndexTrendData, IndexTrendPoint, KLinePoint } from '../types'
+import { fetchEtfQuote, fetchEtfTrend, fetchIndexEtfs, fetchIndices, fetchIndexTrend } from '../api/quote'
+import { fetchFundEstimates } from '../api/funds'
 import {
   createCustomIndex, deleteCustomIndex, fetchCustomIndexPreset, fetchCustomIndexPresets,
   fetchCustomIndices, fetchCustomIndexKline, updateCustomIndex,
@@ -17,6 +18,8 @@ import type { IndicatorResult, KlineData, KlinePeriod, StockInfo } from '../type
 import type { CollectCategory } from '../api/collect'
 import RefreshButton from '../components/RefreshButton.vue'
 import IndexGroupCard from '../components/IndexGroupCard.vue'
+import MinuteVolumeChart from '../components/MinuteVolumeChart.vue'
+import EtfHeatmap from '../components/EtfHeatmap.vue'
 import StockChart from '../components/analysis/StockChart.vue'
 import IndicatorChart from '../components/analysis/IndicatorChart.vue'
 import KLineChart from '../components/KLineChart.vue'
@@ -24,6 +27,7 @@ import MarketMatrixChart from '../components/MarketMatrixChart.vue'
 import IntradayTrendChart from '../components/IntradayTrendChart.vue'
 
 const route = useRoute()
+const router = useRouter()
 
 const items = ref<IndexItem[]>([])
 const loading = ref(true)
@@ -383,6 +387,53 @@ async function loadEtfs(code: string) {
     if (seq === etfSeq) etfs.value = []
   }
 }
+
+// ---- 关联 ETF 弹窗：左侧估值与持仓，右侧实时交易数据 ----
+const etfDialog = ref(false)
+const etfLoading = ref(false)
+const etfQuote = ref<EtfQuote | null>(null)
+const etfEstimate = ref<FundEstimate | null>(null)
+const etfTrend = ref<IndexTrendPoint[]>([])
+const etfTitle = ref('')
+let etfDetailSeq = 0
+
+async function openEtf(e: IndexEtf) {
+  const seq = ++etfDetailSeq
+  etfTitle.value = `${e.name} ${e.symbol}`
+  etfQuote.value = null
+  etfEstimate.value = null
+  etfTrend.value = []
+  etfDialog.value = true
+  etfLoading.value = true
+  try {
+    const [quote, estimate, trend] = await Promise.allSettled([
+      fetchEtfQuote(e.symbol),
+      fetchFundEstimates([e.symbol]),
+      fetchEtfTrend(e.symbol),
+    ])
+    if (seq !== etfDetailSeq) return
+    if (quote.status === 'fulfilled') etfQuote.value = quote.value
+    if (estimate.status === 'fulfilled') etfEstimate.value = estimate.value[0] ?? null
+    if (trend.status === 'fulfilled') etfTrend.value = trend.value
+  } finally {
+    if (seq === etfDetailSeq) etfLoading.value = false
+  }
+}
+
+/** 点击持仓股 → 进入该个股的详情分析页 */
+function openHolding(row: FundHoldingItem) {
+  if (!row.symbol) return
+  etfDialog.value = false
+  router.push(`/analysis/${row.symbol}`)
+}
+
+const fmtPrice = (v: number | null | undefined) => (v === null || v === undefined ? '--' : v.toFixed(3))
+const fmtWan = (v: number | null | undefined) =>
+  (v === null || v === undefined ? '--' : `${(v / 1e4).toFixed(2)}万手`)
+const fmtYi = (v: number | null | undefined) =>
+  (v === null || v === undefined ? '--' : `${(v / 1e8).toFixed(2)}亿`)
+const fmtRate = (v: number | null | undefined) => (v === null || v === undefined ? '--' : `${v.toFixed(2)}%`)
+const pctClassOpt = (v: number | null | undefined) => (v === null || v === undefined ? '' : pctClass(v))
 
 /** 自定义指数映射为 IndexItem，与公开指数合并展示（custom 标记用于卡片右上角标识）。 */
 function customToIndexItem(ci: CustomIndexItem): IndexItem {
@@ -763,7 +814,7 @@ onMounted(() => {
       <!-- 指数关联的场内 ETF -->
       <div v-if="!selectedCustom && etfs.length" class="ci-components">
         <span class="ci-label">相关ETF</span>
-        <span v-for="e in etfs" :key="e.symbol" class="etf-chip">
+        <span v-for="e in etfs" :key="e.symbol" class="etf-chip" title="查看基金详情" @click="openEtf(e)">
           <span class="etf-name">{{ e.name }}</span>
           <em>{{ e.symbol }}</em>
           <b v-if="e.price !== null">{{ e.price.toFixed(3) }}</b>
@@ -853,6 +904,15 @@ onMounted(() => {
               : tab === 'quote'
                 ? '暂无行情数据（可调整区间或点击“刷新数据”）'
                 : '暂无数据'" />
+      </div>
+
+      <!-- ETF 资金热力图：面积 = 当日成交额，颜色 = 涨跌幅 -->
+      <div v-if="!selectedCustom && etfs.length" class="etf-heat">
+        <div class="etf-heat-title">
+          ETF 资金热力图
+          <span class="etf-hint">面积 = 成交额 · 颜色 = 涨跌幅 · 点击色块查看基金详情</span>
+        </div>
+        <EtfHeatmap :items="etfs" :height="240" @select="openEtf" />
       </div>
     </div>
 
@@ -963,6 +1023,103 @@ onMounted(() => {
         <el-button type="primary" :loading="customSaving" @click="saveCustom">保存</el-button>
       </template>
     </el-dialog>
+
+    <!-- 关联 ETF 详情：左侧涨跌幅/估值/持仓，右侧实时交易数据 -->
+    <el-dialog v-model="etfDialog" :title="etfTitle" width="min(1280px, 96vw)" top="3vh" class="etf-dialog" append-to-body>
+      <div v-loading="etfLoading" class="etf-detail">
+        <div class="etf-summary">
+          <div class="etf-summary-name">
+            <span class="etf-code">{{ etfQuote?.symbol ?? '' }}</span>
+            <span class="etf-type">{{ etfQuote?.industry || 'ETF' }}</span>
+          </div>
+          <div class="etf-summary-price">
+            <b :class="pctClassOpt(etfQuote?.changePct)">{{ fmtPrice(etfQuote?.price) }}</b>
+            <span :class="pctClassOpt(etfQuote?.changePct)">
+              {{ etfQuote?.change === null || etfQuote?.change === undefined ? '--' : `${etfQuote.change >= 0 ? '+' : ''}${etfQuote.change.toFixed(3)}` }}
+              {{ etfQuote?.changePct === null || etfQuote?.changePct === undefined ? '' : fmtPct(etfQuote.changePct) }}
+            </span>
+          </div>
+        </div>
+
+        <div class="etf-body">
+          <div class="etf-col">
+            <div class="etf-block">
+              <div class="etf-block-title">今日实时估值</div>
+              <div class="etf-est">
+                <span class="etf-est-val" :class="pctClassOpt(etfEstimate?.estimatedChangePct)">
+                  {{ etfEstimate?.estimatedChangePct === null || etfEstimate?.estimatedChangePct === undefined ? '--' : fmtPct(etfEstimate.estimatedChangePct) }}
+                </span>
+                <span class="etf-muted">覆盖持仓 {{ etfEstimate ? etfEstimate.coveredWeightPct.toFixed(1) : '--' }}%</span>
+              </div>
+              <p class="etf-muted">
+                季报截止：{{ etfEstimate?.reportDate ? etfEstimate.reportDate.slice(0, 10) : '--' }}
+                · 估算按季报前十大重仓加权
+              </p>
+            </div>
+
+            <div class="etf-block">
+              <div class="etf-block-title">持仓股（季报前十大）<span class="etf-hint">点击可查看个股详情</span></div>
+              <el-table
+                :data="etfEstimate?.holdings ?? []"
+                size="small"
+                height="380"
+                class="etf-holdings"
+                @row-click="openHolding"
+              >
+                <el-table-column prop="name" label="名称" min-width="90" />
+                <el-table-column prop="symbol" label="代码" width="80" />
+                <el-table-column label="占净值" width="80" align="right">
+                  <template #default="{ row }">{{ row.weightPct.toFixed(2) }}%</template>
+                </el-table-column>
+                <el-table-column label="涨跌幅" width="90" align="right">
+                  <template #default="{ row }">
+                    <span :class="pctClassOpt(row.changePct)">{{ fmtPct(row.changePct ?? 0) }}</span>
+                  </template>
+                </el-table-column>
+              </el-table>
+              <p v-if="!etfEstimate?.holdings?.length" class="etf-muted empty">暂无持仓数据（季报重仓股尚未同步）</p>
+            </div>
+          </div>
+
+          <div class="etf-col">
+            <div class="etf-block">
+              <div class="etf-block-title">实时交易数据</div>
+              <div class="etf-kv-grid">
+                <div class="etf-kv"><span>最新价</span><b>{{ fmtPrice(etfQuote?.price) }}</b></div>
+                <div class="etf-kv">
+                  <span>涨跌幅</span>
+                  <b :class="pctClassOpt(etfQuote?.changePct)">
+                    {{ etfQuote?.changePct === null || etfQuote?.changePct === undefined ? '--' : fmtPct(etfQuote.changePct) }}
+                  </b>
+                </div>
+                <div class="etf-kv"><span>今开</span><b>{{ fmtPrice(etfQuote?.open) }}</b></div>
+                <div class="etf-kv"><span>昨收</span><b>{{ fmtPrice(etfQuote?.prevClose) }}</b></div>
+                <div class="etf-kv"><span>最高</span><b>{{ fmtPrice(etfQuote?.high) }}</b></div>
+                <div class="etf-kv"><span>最低</span><b>{{ fmtPrice(etfQuote?.low) }}</b></div>
+                <div class="etf-kv"><span>成交量</span><b>{{ fmtWan(etfQuote?.volume) }}</b></div>
+                <div class="etf-kv"><span>成交额</span><b>{{ fmtYi(etfQuote?.amount) }}</b></div>
+                <div class="etf-kv"><span>换手率</span><b>{{ fmtRate(etfQuote?.turnoverRate) }}</b></div>
+                <div class="etf-kv"><span>量比</span><b>{{ etfQuote?.volumeRatio === null || etfQuote?.volumeRatio === undefined ? '--' : etfQuote.volumeRatio.toFixed(2) }}</b></div>
+                <div class="etf-kv"><span>振幅</span><b>{{ fmtRate(etfQuote?.amplitude) }}</b></div>
+              </div>
+              <p v-if="!etfQuote" class="etf-muted">实时行情暂不可用，仅展示估值与持仓</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 分时成交量：整行铺满，便于悬停查看分钟量 -->
+        <div class="etf-block etf-volume-block">
+          <div class="etf-block-title">分时成交量</div>
+          <MinuteVolumeChart
+            v-if="etfTrend.length"
+            :points="etfTrend"
+            :prev-close="etfQuote?.prevClose"
+            :height="340"
+          />
+          <p v-else class="etf-muted empty">暂无分时数据</p>
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -1011,9 +1168,47 @@ onMounted(() => {
   display: inline-flex; align-items: center; gap: 6px;
   font-size: 12px; color: #606266; background: #f5f7fa;
   border: 1px solid #ebeef5; border-radius: 4px; padding: 1px 6px;
+  cursor: pointer;
 }
+.etf-chip:hover { border-color: #409eff; color: #409eff; }
 .etf-chip em { font-style: normal; color: #909399; }
 .etf-chip b { font-weight: 600; }
+
+/* 关联 ETF 详情弹窗 */
+.etf-summary {
+  display: flex; align-items: baseline; gap: 12px;
+  padding-bottom: 10px; margin-bottom: 12px; border-bottom: 1px solid #ebeef5;
+}
+.etf-summary-name { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.etf-code { color: #909399; }
+.etf-type {
+  font-size: 12px; color: #409eff; background: #ecf5ff;
+  border: 1px solid #d9ecff; border-radius: 3px; padding: 0 4px;
+}
+.etf-summary-price { margin-left: auto; display: flex; align-items: baseline; gap: 10px; font-size: 13px; }
+.etf-summary-price b { font-size: 22px; }
+.etf-body { display: flex; gap: 16px; align-items: flex-start; }
+.etf-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.etf-block { border: 1px solid #ebeef5; border-radius: 6px; padding: 10px 12px; }
+.etf-block-title { font-size: 13px; font-weight: 600; color: #303133; margin-bottom: 8px; }
+.etf-est { display: flex; align-items: baseline; gap: 10px; }
+.etf-est-val { font-size: 26px; font-weight: 700; }
+.etf-muted { font-size: 12px; color: #909399; margin: 4px 0 0; }
+.etf-muted.empty { text-align: center; padding: 12px 0; }
+.etf-hint { font-weight: 400; font-size: 12px; color: #909399; margin-left: 8px; }
+.etf-holdings :deep(.el-table__row) { cursor: pointer; }
+.etf-volume-block { margin-top: 12px; }
+.etf-heat { margin-top: 12px; padding-top: 10px; border-top: 1px solid #ebeef5; }
+.etf-heat-title { font-size: 13px; font-weight: 600; color: #303133; margin-bottom: 8px; }
+/* 弹窗内容过高时内部滚动，避免超出视口 */
+:global(.etf-dialog) .el-dialog__body { max-height: calc(100vh - 140px); overflow-y: auto; }
+.etf-kv-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 16px; }
+.etf-kv {
+  display: flex; justify-content: space-between; font-size: 13px;
+  padding: 6px 0; border-bottom: 1px dashed #f0f2f5;
+}
+.etf-kv span { color: #909399; }
+.etf-kv b { font-weight: 600; color: #303133; }
 .ci-form-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
 .ci-form-label { width: 80px; color: #606266; font-size: 13px; }
 .ci-rows-head { display: flex; align-items: center; justify-content: space-between; margin: 4px 0 8px; }

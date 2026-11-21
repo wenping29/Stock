@@ -27,14 +27,16 @@ public class FundEstimateService(
     {
         var symbols = fundSymbols
             .Select(s => s.Trim())
-            .Where(s => s.EndsWith(".F", StringComparison.OrdinalIgnoreCase))
+            // 场外基金（.F 后缀）与场内 ETF（6 位代码）都按季报重仓股估算
+            .Where(s => s.EndsWith(".F", StringComparison.OrdinalIgnoreCase)
+                        || (s.Length == 6 && s.All(char.IsAsciiDigit)))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Take(MaxFundsPerRequest)
             .ToList();
         if (symbols.Count == 0) return [];
 
         var funds = await db.StockBasics.AsNoTracking()
-            .Where(x => symbols.Contains(x.Symbol) && x.Type == SymbolTypes.Fund)
+            .Where(x => symbols.Contains(x.Symbol) && (x.Type == SymbolTypes.Fund || x.Type == SymbolTypes.Etf))
             .ToDictionaryAsync(x => x.Symbol, ct);
         if (funds.Count == 0) return [];
 

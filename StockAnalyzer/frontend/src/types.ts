@@ -228,12 +228,37 @@ export interface IndexItem {
   custom?: boolean
 }
 
-/** 指数关联的场内 ETF；行情源不可用时 price/changePct 为 null。 */
+/** 指数关联的场内 ETF；行情源不可用时 price/changePct 为 null，amount（成交额，元）为 0。 */
 export interface IndexEtf {
   symbol: string
   name: string
   price: number | null
   changePct: number | null
+  amount: number
+}
+
+/** ETF 实时行情明细；行情源不可用时各字段为 null。 */
+export interface EtfQuote {
+  symbol: string
+  name: string
+  industry: string | null
+  price: number | null
+  prevClose: number | null
+  open: number | null
+  high: number | null
+  low: number | null
+  change: number | null
+  changePct: number | null
+  /** 成交量（手） */
+  volume: number | null
+  /** 成交额（元） */
+  amount: number | null
+  /** 换手率（%） */
+  turnoverRate: number | null
+  /** 量比 */
+  volumeRatio: number | null
+  /** 振幅（%） */
+  amplitude: number | null
 }
 
 export interface IndicesData {
