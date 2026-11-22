@@ -18,8 +18,8 @@ function fmtPct(v: number) {
 </script>
 
 <template>
-  <div class="group-head">
-    <span class="group-title">{{ title }}</span>
+  <div v-if="title || $slots.extra" class="group-head">
+    <span v-if="title" class="group-title">{{ title }}</span>
     <slot name="extra" />
   </div>
   <div class="index-grid">

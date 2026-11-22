@@ -312,9 +312,19 @@ const groups = computed(() => {
   return [...map.entries()].map(([group, list]) => ({ group, list }))
 })
 
-// A股宽基置顶（在指数详情卡上方），其余分组排在详情下方
-const topGroups = computed(() => groups.value.filter((g) => g.group === 'A股宽基'))
-const restGroups = computed(() => groups.value.filter((g) => g.group !== 'A股宽基'))
+// 所有指数分组统一置顶展示（A股宽基置顶，风格与主题/行业指数/跨境等分组紧随其后）
+const topGroups = computed(() => {
+  const weight = (name: string) => (name === 'A股宽基' ? 0 : 1)
+  return [...groups.value].sort((a, b) => weight(a.group) - weight(b.group))
+})
+// 分组 Tab：默认 A股宽基
+const activeGroup = ref('A股宽基')
+const currentGroup = computed(() =>
+  topGroups.value.find((g) => g.group === activeGroup.value) ?? topGroups.value[0] ?? null)
+watch(topGroups, (gs) => {
+  if (gs.length && !gs.some((g) => g.group === activeGroup.value))
+    activeGroup.value = gs[0].group
+})
 
 /** 当前 Tab 是否无数据可展示 */
 const showEmpty = computed(() => {
@@ -772,15 +782,22 @@ onMounted(() => {
       </el-empty>
     </div>
 
-    <!-- A股宽基（置顶，自定义指数合并展示：卡片右上角带“自定义”标识） -->
-    <div class="page-card" v-for="g in topGroups" :key="`top-${g.group}`">
-      <IndexGroupCard :title="g.group" :items="g.list"
+    <!-- 指数分组 Tabs（默认 A股宽基，自定义指数合并到 A股宽基展示） -->
+    <div class="page-card" v-if="currentGroup">
+      <div class="group-tabs">
+        <div class="detail-tabs">
+          <span v-for="g in topGroups" :key="g.group"
+            class="detail-tab" :class="{ active: g.group === activeGroup }"
+            @click="activeGroup = g.group">
+            {{ g.group }}<em class="group-count">{{ g.list.length }}</em>
+          </span>
+        </div>
+        <div style="flex: 1" />
+        <el-button v-if="activeGroup === 'A股宽基'" size="small" type="primary" @click="openCreate">新建自定义指数</el-button>
+      </div>
+      <IndexGroupCard :title="''" :items="currentGroup.list"
         :selected-code="selected?.code" @select="onSelectIndex"
-        @edit="editCustomCard" @remove="removeCustomCard">
-        <template #extra>
-          <el-button size="small" type="primary" @click="openCreate">新建自定义指数</el-button>
-        </template>
-      </IndexGroupCard>
+        @edit="editCustomCard" @remove="removeCustomCard" />
     </div>
 
     <!-- 选中指数详情：Tab 切换 行情K线 / 日K均线 / 大数据K线 / 股市矩阵 / 日内走势 -->
@@ -907,19 +924,14 @@ onMounted(() => {
       </div>
 
       <!-- ETF 资金热力图：面积 = 当日成交额，颜色 = 涨跌幅 -->
-      <div v-if="!selectedCustom && etfs.length" class="etf-heat">
+      <div v-if="!selectedCustom" class="etf-heat">
         <div class="etf-heat-title">
           ETF 资金热力图
           <span class="etf-hint">面积 = 成交额 · 颜色 = 涨跌幅 · 点击色块查看基金详情</span>
         </div>
-        <EtfHeatmap :items="etfs" :height="240" @select="openEtf" />
+        <EtfHeatmap v-if="etfs.length" :items="etfs" :height="240" @select="openEtf" />
+        <p v-else class="etf-muted empty">暂无关联 ETF 数据，请先在数据采集页执行“同步标的列表”后刷新</p>
       </div>
-    </div>
-
-    <!-- 其余指数分组 -->
-    <div class="page-card" v-for="g in restGroups" :key="g.group">
-      <IndexGroupCard :title="g.group" :items="g.list"
-        :selected-code="selected?.code" @select="select" />
     </div>
 
     <!-- 新建 / 编辑自定义指数 -->
@@ -1140,6 +1152,11 @@ onMounted(() => {
 }
 .detail-tab:hover { color: #409eff; }
 .detail-tab.active { color: #409eff; border-bottom-color: #409eff; font-weight: 600; }
+
+/* 指数分组 Tab 行：复用详情 Tab 样式，去掉下边框 */
+.group-tabs { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.group-tabs .detail-tabs { border-bottom: none; flex-wrap: wrap; }
+.group-count { margin-left: 4px; font-size: 11px; font-style: normal; color: #909399; }
 
 .chart-toolbar { display: flex; align-items: center; gap: 16px; margin-bottom: 10px; flex-wrap: wrap; }
 .chart-title { color: #606266; font-size: 13px; }
