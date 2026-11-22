@@ -71,12 +71,17 @@ public class CollectController(
         return Ok(new CollectJobDto(jobId, $"financials:{symbol}", "Enqueued", DateTime.UtcNow));
     }
 
-    /// <summary>立即采集单个标的数据（日线 + 资金流 + 分钟线），用于个股详情数据缺失时按需刷新。</summary>
+    /// <summary>立即采集单个标的数据（日线 + 资金流 + 分钟线；场外基金为净值），用于个股详情数据缺失时按需刷新。</summary>
     [HttpPost("symbol/{symbol}")]
     public IActionResult TriggerSymbol(string symbol)
     {
         symbol = (symbol ?? string.Empty).Trim();
-        if (symbol.Length != 6 || !symbol.All(char.IsDigit))
+        // 场外基金代码带 .F 后缀（与 StockBasics 中一致），统一转大写再校验
+        if (symbol.EndsWith(".f", StringComparison.OrdinalIgnoreCase))
+            symbol = symbol[..^2] + ".F";
+        var isFund = symbol.Length == 8 && symbol.EndsWith(".F");
+        var valid = (isFund || symbol.Length == 6) && symbol[..6].All(char.IsDigit);
+        if (!valid)
             return BadRequest(new { message = "标的代码格式不正确" });
 
         var jobId = backgroundJobs.Enqueue<CollectorService>(s => s.SyncSymbolAsync(symbol));
