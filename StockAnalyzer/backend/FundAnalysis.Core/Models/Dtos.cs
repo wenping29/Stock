@@ -198,6 +198,17 @@ public record StockListItemDto(
 
 public record StockListResponse(int Total, int Page, int PageSize, List<StockListItemDto> Items);
 
+/// <summary>个股筛选条件（区间筛选，均可选；比率为 %，市值单位亿元）。</summary>
+public record StockFilterQuery(
+    double? WeightMin = null, double? WeightMax = null,
+    double? ChangeMin = null, double? ChangeMax = null,
+    double? PeMin = null, double? PeMax = null,
+    double? PbMin = null, double? PbMax = null,
+    double? RoeMin = null, double? RoeMax = null,
+    double? RevenueMin = null, double? RevenueMax = null,
+    double? ProfitMin = null, double? ProfitMax = null,
+    double? CapMin = null, double? CapMax = null);
+
 /// <summary>个股单期财务摘要（金额单位：亿元，比率为 %）。</summary>
 public record FinancialReportDto(
     string Symbol, string Name, string ReportDate, string ReportType,

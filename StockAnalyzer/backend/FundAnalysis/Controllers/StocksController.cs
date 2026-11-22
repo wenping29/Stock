@@ -28,7 +28,7 @@ public class StocksController(FundamentalService fundamental, FinancialReportSer
         return Ok(boards);
     }
 
-    /// <summary>个股列表：板块 + 关键字 + 行业 + 排序分页。</summary>
+    /// <summary>个股列表：板块 + 关键字 + 行业 + 数值区间筛选 + 排序分页。</summary>
     [Authorize]
     [HttpGet]
     public async Task<IActionResult> List(
@@ -38,17 +38,19 @@ public class StocksController(FundamentalService fundamental, FinancialReportSer
         [FromQuery] string sort = "marketCap",
         [FromQuery] bool desc = true,
         [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 20)
+        [FromQuery] int pageSize = 20,
+        [FromQuery] StockFilterQuery? filter = null)
     {
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 10, 100);
-
-        var (total, items) = await fundamental.GetStocksAsync(board, keyword, industry, sort, desc, page, pageSize);
 
         // 上证指数按总市值加权且覆盖全部沪市 A 股，故权重 = 个股总市值 / 沪市 A 股总市值
         var shTotalCap = await db.StockFundamentals
             .Where(x => x.Symbol.StartsWith("6") && x.MarketCap > 0)
             .SumAsync(x => x.MarketCap ?? 0);
+
+        var (total, items) = await fundamental.GetStocksAsync(
+            board, keyword, industry, sort, desc, page, pageSize, filter, shTotalCap);
 
         return Ok(new StockListResponse(total, page, pageSize, items.Select(x =>
         {

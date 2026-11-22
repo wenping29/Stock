@@ -9,8 +9,11 @@ export async function fetchStocks(params: {
   desc?: boolean
   page?: number
   pageSize?: number
+  /** 数值区间筛选（weightMin/weightMax、peMin/peMax 等），仅传已填写的项 */
+  filters?: Record<string, number>
 }): Promise<StockListResponse> {
-  const { data } = await http.get('/stocks', { params })
+  const { filters, ...rest } = params
+  const { data } = await http.get('/stocks', { params: { ...rest, ...(filters ?? {}) } })
   return data
 }
 

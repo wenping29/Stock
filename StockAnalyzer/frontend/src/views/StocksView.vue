@@ -87,6 +87,36 @@ const industry = ref('')
 const sort = ref('marketCap')
 const desc = ref(true)
 
+// ---- 数值区间筛选（权重/涨跌幅/ROE/同比为 %，市值单位亿元；留空表示不限制） ----
+const FILTER_FIELDS = [
+  { label: '上证权重', min: 'weightMin', max: 'weightMax', unit: '%' },
+  { label: '涨跌幅', min: 'changeMin', max: 'changeMax', unit: '%' },
+  { label: '市盈率', min: 'peMin', max: 'peMax', unit: '' },
+  { label: '市净率', min: 'pbMin', max: 'pbMax', unit: '' },
+  { label: 'ROE', min: 'roeMin', max: 'roeMax', unit: '%' },
+  { label: '营收同比', min: 'revenueMin', max: 'revenueMax', unit: '%' },
+  { label: '净利同比', min: 'profitMin', max: 'profitMax', unit: '%' },
+  { label: '市值', min: 'capMin', max: 'capMax', unit: '亿' },
+]
+const filters = ref<Record<string, number | undefined>>({})
+
+/** 仅提交已填写（有效数字）的区间条件。 */
+function activeFilters(): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const f of FILTER_FIELDS) {
+    for (const key of [f.min, f.max]) {
+      const v = filters.value[key]
+      if (typeof v === 'number' && Number.isFinite(v)) out[key] = v
+    }
+  }
+  return out
+}
+
+function resetFilters() {
+  filters.value = {}
+  search()
+}
+
 const BOARD_LABEL: Record<string, string> = {
   all: '全部', sh: '沪市主板', star: '科创板', sz: '深市主板',
   chinext: '创业板', bse: '北交所', other: '其他',
@@ -103,6 +133,7 @@ async function load() {
       desc: desc.value,
       page: page.value,
       pageSize,
+      filters: activeFilters(),
     })
     items.value = res.items
     total.value = res.total
@@ -185,6 +216,27 @@ onMounted(async () => {
         <el-button type="primary" @click="search">搜索</el-button>
         <div style="flex: 1" />
         <span class="dim">估值 = 最新交易日收盘 · 共 {{ total }} 只</span>
+      </div>
+
+      <!-- 数值区间筛选：可与其他条件叠加，留空表示不限制 -->
+      <div class="filter-panel">
+        <div class="filter-grid">
+          <div v-for="f in FILTER_FIELDS" :key="f.label" class="filter-item">
+            <span class="filter-label">{{ f.label }}</span>
+            <el-input-number v-model="filters[f.min]" size="small" :controls="false"
+              placeholder="最小" class="filter-input" />
+            <span class="filter-sep">~</span>
+            <el-input-number v-model="filters[f.max]" size="small" :controls="false"
+              placeholder="最大" class="filter-input" />
+            <span v-if="f.unit" class="filter-unit">{{ f.unit }}</span>
+          </div>
+        </div>
+        <div class="filter-actions">
+          <span class="dim">区间筛选与板块 / 行业 / 关键字可叠加</span>
+          <div style="flex: 1" />
+          <el-button size="small" @click="resetFilters">重置</el-button>
+          <el-button size="small" type="primary" @click="search">应用筛选</el-button>
+        </div>
       </div>
     </div>
 
@@ -329,6 +381,15 @@ onMounted(async () => {
 .board-name { font-size: 14px; }
 .board-count { font-size: 12px; opacity: 0.75; }
 .toolbar { display: flex; align-items: center; gap: 10px; }
+/* 数值区间筛选 */
+.filter-panel { margin-top: 12px; padding-top: 10px; border-top: 1px dashed #ebeef5; }
+.filter-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 8px 16px; }
+.filter-item { display: flex; align-items: center; gap: 6px; }
+.filter-label { width: 60px; flex-shrink: 0; color: #606266; font-size: 12px; }
+.filter-input { width: 92px; }
+.filter-sep { color: #c0c4cc; }
+.filter-unit { width: 14px; color: #909399; font-size: 12px; }
+.filter-actions { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
 .dim { color: #909399; font-size: 12px; }
 .symbol-text { margin-left: 2px; }
 /* 左表格 + 右信息面板 */

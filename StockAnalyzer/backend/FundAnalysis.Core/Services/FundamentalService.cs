@@ -338,7 +338,8 @@ public class FundamentalService(AppDbContext db, IHttpClientFactory factory, ILo
 
     /// <summary>个股列表：板块 + 关键字 + 行业 + 排序分页。</summary>
     public async Task<(int Total, List<StockFundamental> Items)> GetStocksAsync(
-        string? board, string? keyword, string? industry, string sort, bool desc, int page, int pageSize)
+        string? board, string? keyword, string? industry, string sort, bool desc, int page, int pageSize,
+        StockFilterQuery? filter = null, double shTotalCap = 0)
     {
         var q = db.StockFundamentals.AsNoTracking().AsQueryable();
 
@@ -359,6 +360,41 @@ public class FundamentalService(AppDbContext db, IHttpClientFactory factory, ILo
         }
         if (!string.IsNullOrWhiteSpace(industry))
             q = q.Where(x => x.Industry == industry);
+
+        // 数值区间筛选：字段为空的行在设置该条件时会被排除
+        if (filter is not null)
+        {
+            if (filter.ChangeMin is not null) q = q.Where(x => x.ChangePct != null && x.ChangePct >= filter.ChangeMin);
+            if (filter.ChangeMax is not null) q = q.Where(x => x.ChangePct != null && x.ChangePct <= filter.ChangeMax);
+            if (filter.PeMin is not null) q = q.Where(x => x.PeTtm != null && x.PeTtm >= filter.PeMin);
+            if (filter.PeMax is not null) q = q.Where(x => x.PeTtm != null && x.PeTtm <= filter.PeMax);
+            if (filter.PbMin is not null) q = q.Where(x => x.PbMrq != null && x.PbMrq >= filter.PbMin);
+            if (filter.PbMax is not null) q = q.Where(x => x.PbMrq != null && x.PbMrq <= filter.PbMax);
+            if (filter.RoeMin is not null) q = q.Where(x => x.Roe != null && x.Roe >= filter.RoeMin);
+            if (filter.RoeMax is not null) q = q.Where(x => x.Roe != null && x.Roe <= filter.RoeMax);
+            if (filter.RevenueMin is not null) q = q.Where(x => x.RevenueYoY != null && x.RevenueYoY >= filter.RevenueMin);
+            if (filter.RevenueMax is not null) q = q.Where(x => x.RevenueYoY != null && x.RevenueYoY <= filter.RevenueMax);
+            if (filter.ProfitMin is not null) q = q.Where(x => x.NetProfitYoY != null && x.NetProfitYoY >= filter.ProfitMin);
+            if (filter.ProfitMax is not null) q = q.Where(x => x.NetProfitYoY != null && x.NetProfitYoY <= filter.ProfitMax);
+            if (filter.CapMin is not null) q = q.Where(x => x.MarketCap != null && x.MarketCap >= filter.CapMin);
+            if (filter.CapMax is not null) q = q.Where(x => x.MarketCap != null && x.MarketCap <= filter.CapMax);
+
+            // 上证权重 = 沪市个股市值 / 沪市 A 股总市值：先换算成市值阈值再过滤
+            if (shTotalCap > 0 && (filter.WeightMin is not null || filter.WeightMax is not null))
+            {
+                q = q.Where(x => x.Symbol.StartsWith("6") && x.MarketCap != null && x.MarketCap > 0);
+                if (filter.WeightMin is not null)
+                {
+                    var cap = filter.WeightMin.Value / 100 * shTotalCap;
+                    q = q.Where(x => x.MarketCap >= cap);
+                }
+                if (filter.WeightMax is not null)
+                {
+                    var cap = filter.WeightMax.Value / 100 * shTotalCap;
+                    q = q.Where(x => x.MarketCap <= cap);
+                }
+            }
+        }
 
         q = (sort, desc) switch
         {
