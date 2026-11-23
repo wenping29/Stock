@@ -2,7 +2,7 @@ import http from './http'
 import type {
   SearchItem, KLineResponse, PerformanceData, MoneyFlowData, WatchlistItem, AdminUser,
   MarketIndex, MarketVolume, HsgtFlow, FxRate, Us10y, CnBond, IndexItem, IndexTrendData, SectorFlow,
-  MarketVolumeToday, IndexEtf, EtfQuote, IndexTrendPoint, IndexMoneyFlow,
+  MarketVolumeToday, IndexEtf, EtfQuote, IndexTrendPoint, IndexMoneyFlow, MarginBalance,
 } from '../types'
 
 export async function fetchMarketOverview(): Promise<MarketIndex[]> {
@@ -42,6 +42,12 @@ export async function fetchSectorFlow(): Promise<SectorFlow> {
 /** 指数每日资金流（net=当日净流入=流入-流出，cumulative=累计存量，单位亿元）。 */
 export async function fetchIndexMoneyFlow(code: string, days = 120): Promise<IndexMoneyFlow> {
   const { data } = await http.get('/quote/index-moneyflow', { params: { code, days } })
+  return data
+}
+
+/** 全市场两融余额（沪深合计），单位亿元，按日期升序。 */
+export async function fetchMarginBalance(days = 500): Promise<MarginBalance> {
+  const { data } = await http.get('/quote/margin-balance', { params: { days } })
   return data
 }
 

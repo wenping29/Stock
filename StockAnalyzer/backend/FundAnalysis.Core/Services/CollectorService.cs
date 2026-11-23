@@ -9,7 +9,7 @@ namespace FundAnalysis.Services;
 
 /// <summary>从数据源拉取行情并幂等入库。所有方法可重复执行，已存在的数据跳过、当日数据更新。</summary>
 public class CollectorService(
-    AppDbContext db, IQuoteProvider provider, IHttpClientFactory factory,
+    AppDbContext db, IQuoteProvider provider, EastmoneyProvider eastmoney, IHttpClientFactory factory,
     IConfiguration config, ILogger<CollectorService> logger)
 {
     private const int DailyBars = 500;      // 约两年日线
@@ -460,6 +460,7 @@ public class CollectorService(
         await SyncWatchlistMinutesAsync();
         await SyncSectorMoneyFlowAsync();
         await SyncIndexMoneyFlowAsync();
+        await SyncMarginBalanceAsync();
     }
 
     /// <summary>行情序列日线追加（仅新增缺失日期，历史导入数据保持原值）。</summary>
@@ -671,6 +672,48 @@ public class CollectorService(
 
             await Task.Delay(6000);
         }
+    }
+
+    /// <summary>
+    /// 全市场两融余额（东财数据中心，沪深两市合计）。交易所收盘后披露，按日期幂等 upsert。
+    /// </summary>
+    [DisableConcurrentExecution(timeoutInSeconds: 300)]
+    public async Task SyncMarginBalanceAsync()
+    {
+        var items = await eastmoney.FetchMarginBalanceAsync(DailyBars);
+        if (items.Count == 0)
+        {
+            logger.LogWarning("两融余额未获取到数据");
+            return;
+        }
+
+        var existing = await db.MarginBalances.ToDictionaryAsync(x => x.Date);
+        var added = 0;
+        foreach (var item in items)
+        {
+            var date = item.Date.Date;
+            if (existing.TryGetValue(date, out var row))
+            {
+                row.FinancingBalance = item.FinancingBalance;
+                row.MarginTradingBalance = item.MarginTradingBalance;
+            }
+            else
+            {
+                db.MarginBalances.Add(new MarginBalanceDaily
+                {
+                    Date = date,
+                    FinancingBalance = item.FinancingBalance,
+                    MarginTradingBalance = item.MarginTradingBalance,
+                });
+                added++;
+            }
+        }
+
+        await db.SaveChangesAsync();
+        var latest = items[^1];
+        logger.LogInformation(
+            "两融余额同步完成，新增 {Count} 条，最新 {Date:yyyy-MM-dd} 融资余额 {Value} 亿",
+            added, latest.Date, Math.Round(latest.FinancingBalance / 1e8, 2));
     }
 
     /// <summary>所有用户自选 ∪ 自定义指数成分股 ∪ 配置中的示例标的。</summary>

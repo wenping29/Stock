@@ -22,7 +22,8 @@ builder.Services.AddHttpClient("eastmoney", client =>
         // 限制连接池上限，配合 Provider 内的并发闸门降低触发东财风控的概率
         MaxConnectionsPerServer = 8,
     });
-builder.Services.AddScoped<IQuoteProvider, EastmoneyProvider>();
+builder.Services.AddScoped<EastmoneyProvider>();
+builder.Services.AddScoped<IQuoteProvider>(sp => sp.GetRequiredService<EastmoneyProvider>());
 builder.Services.AddScoped<CollectorService>();
 builder.Services.AddScoped<LiquidityService>();
 builder.Services.AddScoped<FundamentalService>();
@@ -75,6 +76,9 @@ if (mode != "daemon")
             case "index-flow":
                 await collector.SyncIndexMoneyFlowAsync();
                 break;
+            case "margin":
+                await collector.SyncMarginBalanceAsync();
+                break;
             case "financials":
                 await financials.SyncWatchlistAsync();
                 break;
@@ -90,6 +94,7 @@ if (mode != "daemon")
                 await collector.SyncMarketIndicatorsAsync();
                 await collector.SyncSectorMoneyFlowAsync();
                 await collector.SyncIndexMoneyFlowAsync();
+                await collector.SyncMarginBalanceAsync();
                 await fundamentals.SyncAllAsync();
                 await financials.SyncWatchlistAsync();
                 await sentiment.SyncAsync();

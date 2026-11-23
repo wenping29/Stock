@@ -687,4 +687,27 @@ public class QuoteController(
         if (points.Count > take) points = points.Skip(points.Count - take).ToList();
         return Ok(new IndexMoneyFlowDto(code, points));
     }
+
+    /// <summary>
+    /// 全市场两融余额（沪深两市合计，东财数据中心），单位亿元，按日期升序。
+    /// FinancingBalance=融资余额，MarginTradingBalance=融资融券余额；未采集到数据时返回空列表。
+    /// </summary>
+    [Authorize]
+    [HttpGet("margin-balance")]
+    public async Task<IActionResult> MarginBalance([FromQuery] int days = 500)
+    {
+        var take = Math.Clamp(days, 1, 2000);
+        var rows = await db.MarginBalances
+            .OrderByDescending(x => x.Date)
+            .Take(take)
+            .ToListAsync();
+        rows.Reverse();
+
+        var points = rows.Select(x => new MarginBalancePointDto(
+            x.Date.ToString("yyyy-MM-dd"),
+            Math.Round(x.FinancingBalance / 1e8, 2),
+            Math.Round(x.MarginTradingBalance / 1e8, 2))).ToList();
+
+        return Ok(new MarginBalanceDto(points));
+    }
 }

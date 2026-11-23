@@ -234,6 +234,35 @@ public class EastmoneyProvider(IHttpClientFactory factory) : IQuoteProvider
         return list;
     }
 
+    /// <summary>
+    /// 全市场两融余额（东财数据中心 RPTA_RZRQ_LSHJ，沪深两市合计）。
+    /// 返回按日期升序，单位元；RZYE=融资余额，RZRQYE=融资融券余额。
+    /// </summary>
+    public async Task<List<MarginBalanceItem>> FetchMarginBalanceAsync(int days, CancellationToken ct = default)
+    {
+        var url = $"https://datacenter-web.eastmoney.com/api/data/v1/get?reportName=RPTA_RZRQ_LSHJ&columns=ALL&pageNumber=1&pageSize={days}&sortColumns=dim_date&sortTypes=-1&source=WEB&client=WEB";
+        using var client = NewClient();
+        using var doc = JsonDocument.Parse(await GetWithRetryAsync(client, url, ct));
+
+        var list = new List<MarginBalanceItem>();
+        if (!doc.RootElement.TryGetProperty("result", out var result) || result.ValueKind == JsonValueKind.Null)
+            return list;
+        if (!result.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
+            return list;
+
+        foreach (var row in data.EnumerateArray())
+        {
+            if (!row.TryGetProperty("DIM_DATE", out var dv) || dv.ValueKind != JsonValueKind.String) continue;
+            if (!DateTime.TryParse(dv.GetString(), Cn, DateTimeStyles.None, out var date)) continue;
+            if (!row.TryGetProperty("RZYE", out var rz) || rz.ValueKind != JsonValueKind.Number) continue;
+
+            var all = row.TryGetProperty("RZRQYE", out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDouble() : 0;
+            list.Add(new MarginBalanceItem(date.Date, rz.GetDouble(), all));
+        }
+
+        return list.OrderBy(x => x.Date).ToList();
+    }
+
     public async Task<List<SectorFlowItem>> FetchSectorMoneyFlowAsync(CancellationToken ct = default)
     {
         // 行业板块列表（fs=m:90+t:2），f12=板块代码，f14=名称，f3=涨跌幅%，f62=主力净流入（元），f6=成交额（元）

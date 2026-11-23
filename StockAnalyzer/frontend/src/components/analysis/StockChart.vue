@@ -18,6 +18,8 @@ const props = withDefaults(defineProps<{
   moneySupplyData?: { month: string; m0: number; m1: number; m2: number }[]
   /** 市场存量资金：累计主力净流入（流入-流出），单位亿元，按日期对齐走独立右轴 */
   moneyFlowData?: { date: string; value: number }[]
+  /** 全市场融资余额（沪深合计），单位亿元，按日期对齐走独立右轴 */
+  marginBalanceData?: { date: string; value: number }[]
   /** 主图下方叠加成交量柱状副图 */
   showVolume?: boolean
   height?: number
@@ -28,6 +30,7 @@ const props = withDefaults(defineProps<{
   cnRateData: () => [],
   moneySupplyData: () => [],
   moneyFlowData: () => [],
+  marginBalanceData: () => [],
   showVolume: false,
   height: 460,
 })
@@ -71,6 +74,7 @@ const showUsRate = ref(false)
 const showUsdRate = ref(false)
 const showCnRate = ref(false)
 const showMarketFlow = ref(false)
+const showMarginBalance = ref(false)
 
 type MoneyKey = 'M0' | 'M1' | 'M2'
 const MONEY_DEFS: { key: MoneyKey; label: string; field: 'm0' | 'm1' | 'm2'; color: string }[] = [
@@ -149,6 +153,7 @@ const hasCnRate = computed(() => props.cnRateData.length > 0)
 
 const hasMoney = computed(() => props.moneySupplyData.length > 0)
 const hasMarketFlow = computed(() => props.moneyFlowData.length > 0)
+const hasMarginBalance = computed(() => props.marginBalanceData.length > 0)
 
 /** 月度序列按 K 线日期对齐（取不晚于该日的最近一个月值）。 */
 function alignMonthly(kline: KlineData[], points: { month: string; value: number }[]): (number | null)[] {
@@ -382,7 +387,24 @@ const option = computed<EChartsOption | null>(() => {
     legendData.push('市场存量资金(亿)')
   }
 
-  const volumeAxisIndex = 1 + (hasRateAxis ? 1 : 0) + (showMoney ? 1 : 0) + (showFlow ? 1 : 0)
+  // 融资余额：全市场融资余额（沪深合计），走存量资金之后的独立右轴
+  const showMargin = showMarginBalance.value && hasMarginBalance.value
+  const marginAxisIndex = flowAxisIndex + (showFlow ? 1 : 0)
+  if (showMargin) {
+    series.push({
+      name: '融资余额(亿)',
+      type: 'line',
+      yAxisIndex: marginAxisIndex,
+      data: alignValue(kline, props.marginBalanceData),
+      showSymbol: false,
+      connectNulls: false,
+      lineStyle: { width: 1.6, color: '#ef6c00' },
+      itemStyle: { color: '#ef6c00' },
+    })
+    legendData.push('融资余额(亿)')
+  }
+
+  const volumeAxisIndex = 1 + (hasRateAxis ? 1 : 0) + (showMoney ? 1 : 0) + (showFlow ? 1 : 0) + (showMargin ? 1 : 0)
   if (props.showVolume) {
     series.push({
       name: '成交量',
@@ -397,7 +419,7 @@ const option = computed<EChartsOption | null>(() => {
   }
 
   // 利率/货币/存量资金轴同在右侧时依次向外错开，避免刻度与轴名互相覆盖
-  const rightAxisCount = (hasRateAxis ? 1 : 0) + (showMoney ? 1 : 0) + (showFlow ? 1 : 0)
+  const rightAxisCount = (hasRateAxis ? 1 : 0) + (showMoney ? 1 : 0) + (showFlow ? 1 : 0) + (showMargin ? 1 : 0)
   const right = rightAxisCount === 0 ? 24 : 64 + (rightAxisCount - 1) * 60
 
   return {
@@ -483,6 +505,17 @@ const option = computed<EChartsOption | null>(() => {
             splitLine: { show: false },
           }]
         : []),
+      ...(showMargin
+        ? [{
+            type: 'value' as const,
+            scale: true,
+            offset: ((hasRateAxis ? 1 : 0) + (showMoney ? 1 : 0) + (showFlow ? 1 : 0)) * 60,
+            name: '融资余额 亿',
+            nameTextStyle: { fontSize: 10, color: '#ef6c00' },
+            axisLabel: { fontSize: 10, color: '#ef6c00' },
+            splitLine: { show: false },
+          }]
+        : []),
       ...(props.showVolume
         ? [{
             type: 'value' as const,
@@ -502,8 +535,8 @@ const option = computed<EChartsOption | null>(() => {
 
 useEChart(el, () => option.value, () => [
   filtered.value, chartType.value, showUsRate.value, showUsdRate.value, showCnRate.value,
-  showMarketFlow.value, activeMoney.value, props.showVolume, props.moneySupplyData.length,
-  props.cnRateData.length, props.moneyFlowData.length,
+  showMarketFlow.value, showMarginBalance.value, activeMoney.value, props.showVolume, props.moneySupplyData.length,
+  props.cnRateData.length, props.moneyFlowData.length, props.marginBalanceData.length,
 ])
 
 const presets: { label: string; val: number | 'all' }[] = [
@@ -562,6 +595,13 @@ const presets: { label: string; val: number | 'all' }[] = [
         title="所选指数累计主力净流入（流入-流出），单位亿元"
         @click="showMarketFlow = !showMarketFlow"
       >市场存量资金</button>
+      <button
+        v-if="hasMarginBalance"
+        class="us-toggle"
+        :class="{ active: showMarginBalance }"
+        title="全市场融资余额（沪深合计），单位亿元"
+        @click="showMarginBalance = !showMarginBalance"
+      >融资余额</button>
       <!-- 附加工具（如技术指标开关），排在美债/美元利率/M0·M1·M2/人民币利率 按钮之后 -->
       <slot name="toolbar" />
     </div>

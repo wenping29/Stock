@@ -56,6 +56,10 @@ public static class CollectorJobs
         jobs.AddOrUpdate<CollectorService>(
             "index-flow-sync", s => s.SyncIndexMoneyFlowAsync(), "30 17 * * 1-5");
 
+        // 全市场两融余额（交易所收盘后披露）：交易日 19:00
+        jobs.AddOrUpdate<CollectorService>(
+            "margin-balance-sync", s => s.SyncMarginBalanceAsync(), "0 19 * * 1-5");
+
         // 自选价格提醒检查：交易时段每 5 分钟
         jobs.AddOrUpdate<AlertService>(
             "alert-check", s => s.CheckAllAsync(), "*/5 9-15 * * 1-5");

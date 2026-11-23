@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { CustomIndexItem, CustomIndexPreset, EtfQuote, FundEstimate, FundHoldingItem, IndexEtf, IndexItem, IndexTrendData, IndexTrendPoint, KLinePoint } from '../types'
-import { fetchEtfQuote, fetchEtfTrend, fetchIndexEtfs, fetchIndexMoneyFlow, fetchIndices, fetchIndexTrend } from '../api/quote'
+import { fetchEtfQuote, fetchEtfTrend, fetchIndexEtfs, fetchIndexMoneyFlow, fetchMarginBalance, fetchIndices, fetchIndexTrend } from '../api/quote'
 import { fetchFundEstimates } from '../api/funds'
 import {
   createCustomIndex, deleteCustomIndex, fetchCustomIndexPreset, fetchCustomIndexPresets,
@@ -255,6 +255,17 @@ async function loadIndexMoneyFlow(code: string) {
 function clearIndexMoneyFlow() {
   flowSeq++
   indexFlow.value = []
+}
+
+// ---- 融资余额：全市场融资余额（沪深合计），单位亿元，与所选指数无关 ----
+const marginBalance = ref<{ date: string; value: number }[]>([])
+async function loadMarginBalance() {
+  try {
+    const res = await fetchMarginBalance()
+    marginBalance.value = res.points.map((p) => ({ date: p.date, value: p.financingBalance }))
+  } catch {
+    marginBalance.value = []
+  }
 }
 
 // ---- 行情K线技术指标按钮：成交量 / MA / BOLL / MACD / RSI ----
@@ -794,6 +805,7 @@ onMounted(() => {
   loadUsdRate()
   loadCnRateOverlay()
   loadMoneySupply()
+  loadMarginBalance()
 })
 </script>
 
@@ -909,6 +921,7 @@ onMounted(() => {
           :cn-rate-data="cnRateOverlay"
           :money-supply-data="moneySupply"
           :money-flow-data="indexFlow"
+          :margin-balance-data="marginBalance"
           @range-change="onQuoteRangeChange">
           <template #toolbar>
             <span v-for="b in IND_BUTTONS" :key="b.key"

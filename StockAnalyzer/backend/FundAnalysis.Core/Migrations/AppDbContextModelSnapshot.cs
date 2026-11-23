@@ -511,6 +511,31 @@ namespace FundAnalysis.Migrations
                     b.ToTable("LprRates");
                 });
 
+            modelBuilder.Entity("FundAnalysis.Models.MarginBalanceDaily", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<double>("FinancingBalance")
+                        .HasColumnType("double precision");
+
+                    b.Property<double>("MarginTradingBalance")
+                        .HasColumnType("double precision");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Date")
+                        .IsUnique();
+
+                    b.ToTable("MarginBalances");
+                });
+
             modelBuilder.Entity("FundAnalysis.Models.MarketIndicator", b =>
                 {
                     b.Property<long>("Id")

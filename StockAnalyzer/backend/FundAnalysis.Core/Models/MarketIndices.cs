@@ -33,6 +33,19 @@ public class IndexMoneyFlowDaily
     public double SmallNet { get; set; }
 }
 
+/// <summary>
+/// 全市场两融余额（东财 RPTA_RZRQ_LSHJ，沪深两市合计，单位：元）。
+/// FinancingBalance 为融资余额（融资买入累计-偿还累计，真实现金存量）；
+/// MarginTradingBalance 为融资融券余额合计。Date 唯一。
+/// </summary>
+public class MarginBalanceDaily
+{
+    public long Id { get; set; }
+    public DateTime Date { get; set; }
+    public double FinancingBalance { get; set; }
+    public double MarginTradingBalance { get; set; }
+}
+
 /// <summary>系统内置指数清单（指数页展示 + 采集范围）。</summary>
 public static class MarketIndices
 {

@@ -190,6 +190,17 @@ export interface IndexMoneyFlow {
   points: IndexMoneyFlowPoint[]
 }
 
+/** 全市场两融余额点，单位亿元。financingBalance=融资余额，marginTradingBalance=融资融券余额。 */
+export interface MarginBalancePoint {
+  date: string
+  financingBalance: number
+  marginTradingBalance: number
+}
+
+export interface MarginBalance {
+  points: MarginBalancePoint[]
+}
+
 export interface FxPoint {
   date: string
   rate: number
