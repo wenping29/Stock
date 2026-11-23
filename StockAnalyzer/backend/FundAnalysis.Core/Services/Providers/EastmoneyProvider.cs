@@ -19,6 +19,9 @@ public class EastmoneyProvider(IHttpClientFactory factory) : IQuoteProvider
 
     private static readonly CultureInfo Cn = CultureInfo.InvariantCulture;
 
+    // 全局并发闸门：限制同时发往东财的请求数，配合每次成功后的 400ms 间隔，避免短时突发触发风控
+    private static readonly SemaphoreSlim RequestGate = new(3, 3);
+
     private HttpClient NewClient()
     {
         var client = factory.CreateClient("eastmoney");
@@ -561,20 +564,29 @@ public class EastmoneyProvider(IHttpClientFactory factory) : IQuoteProvider
         const int maxAttempts = 3;
         for (var attempt = 1; ; attempt++)
         {
+            await RequestGate.WaitAsync(ct);
             try
             {
-                var body = await client.GetStringAsync(url, ct);
-                await Task.Delay(400, ct);
-                return body;
+                try
+                {
+                    var body = await client.GetStringAsync(url, ct);
+                    await Task.Delay(400, ct);
+                    return body;
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception) when (attempt < maxAttempts)
+                {
+                }
             }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            finally
             {
-                throw;
+                RequestGate.Release();
             }
-            catch (Exception) when (attempt < maxAttempts)
-            {
-                await Task.Delay(150 * attempt, ct);
-            }
+
+            await Task.Delay(150 * attempt, ct);
         }
     }
 

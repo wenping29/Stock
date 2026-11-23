@@ -11,16 +11,7 @@ var builder = Host.CreateApplicationBuilder(args);
 builder.Configuration.AddCommandLine(args);
 
 builder.Services.AddDbContext<AppDbContext>(opt => opt.UseDatabase(builder.Configuration));
-builder.Services.AddHttpClient("eastmoney", client =>
-{
-    client.Timeout = TimeSpan.FromSeconds(10);
-})
-    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
-    {
-        AutomaticDecompression = DecompressionMethods.All,
-        PooledConnectionLifetime = TimeSpan.FromMinutes(2),
-        MaxConnectionsPerServer = 32,
-    });
+builder.Services.AddEastmoneyHttpClient(builder.Configuration);
 builder.Services.AddScoped<IQuoteProvider, EastmoneyProvider>();
 builder.Services.AddScoped<CollectorService>();
 builder.Services.AddScoped<LiquidityService>();
@@ -71,6 +62,9 @@ if (mode != "daemon")
             case "sector":
                 await collector.SyncSectorMoneyFlowAsync();
                 break;
+            case "index-flow":
+                await collector.SyncIndexMoneyFlowAsync();
+                break;
             case "financials":
                 await financials.SyncWatchlistAsync();
                 break;
@@ -85,6 +79,7 @@ if (mode != "daemon")
                 await collector.SyncIndicesAsync();
                 await collector.SyncMarketIndicatorsAsync();
                 await collector.SyncSectorMoneyFlowAsync();
+                await collector.SyncIndexMoneyFlowAsync();
                 await fundamentals.SyncAllAsync();
                 await financials.SyncWatchlistAsync();
                 await sentiment.SyncAsync();

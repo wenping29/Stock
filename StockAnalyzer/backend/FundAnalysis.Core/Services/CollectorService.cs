@@ -156,6 +156,8 @@ public class CollectorService(
         {
             if (basic.Type == SymbolTypes.Fund) continue;
             await SyncMinutesAsync(basic);
+            // 拉长自选分钟线请求间隔，降低触发东财频率风控的概率
+            await Task.Delay(500);
         }
     }
 

@@ -41,6 +41,8 @@ public class CollectionScheduler(IServiceProvider services, ILogger<CollectionSc
                     await liquidity.SyncAllAsync();
                     await collector.SyncIndicesAsync();
                     await collector.SyncMarketIndicatorsAsync();
+                    await collector.SyncSectorMoneyFlowAsync();
+                    await collector.SyncIndexMoneyFlowAsync();
                     await fundamentals.SyncAllAsync();
                     await financials.SyncWatchlistAsync();
                     await sentiment.SyncAsync();
