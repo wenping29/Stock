@@ -11,7 +11,17 @@ var builder = Host.CreateApplicationBuilder(args);
 builder.Configuration.AddCommandLine(args);
 
 builder.Services.AddDbContext<AppDbContext>(opt => opt.UseDatabase(builder.Configuration));
-builder.Services.AddEastmoneyHttpClient(builder.Configuration);
+builder.Services.AddHttpClient("eastmoney", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(10);
+})
+    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+    {
+        AutomaticDecompression = DecompressionMethods.All,
+        PooledConnectionLifetime = TimeSpan.FromMinutes(2),
+        // 限制连接池上限，配合 Provider 内的并发闸门降低触发东财风控的概率
+        MaxConnectionsPerServer = 8,
+    });
 builder.Services.AddScoped<IQuoteProvider, EastmoneyProvider>();
 builder.Services.AddScoped<CollectorService>();
 builder.Services.AddScoped<LiquidityService>();

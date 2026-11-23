@@ -110,7 +110,17 @@ builder.Services.AddHangfire(h =>
 builder.Services.AddHangfireServer();
 
 // ---------- 业务服务 ----------
-builder.Services.AddEastmoneyHttpClient(config);
+builder.Services.AddHttpClient("eastmoney", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(10);
+})
+    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+    {
+        AutomaticDecompression = DecompressionMethods.All,
+        PooledConnectionLifetime = TimeSpan.FromMinutes(2),
+        // 限制连接池上限，配合 Provider 内的并发闸门降低触发东财风控的概率
+        MaxConnectionsPerServer = 8,
+    });
 builder.Services.AddHttpClient("tushare");
 builder.Services.AddScoped<EastmoneyProvider>();
 builder.Services.AddScoped<TushareProvider>();
