@@ -27,6 +27,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
     public DbSet<LprRate> LprRates => Set<LprRate>();
     public DbSet<OmoOperation> OmoOperations => Set<OmoOperation>();
     public DbSet<IndexDaily> IndexDailies => Set<IndexDaily>();
+    public DbSet<IndexMoneyFlowDaily> IndexMoneyFlows => Set<IndexMoneyFlowDaily>();
     public DbSet<StockFundamental> StockFundamentals => Set<StockFundamental>();
     public DbSet<StockFinancialReport> StockFinancialReports => Set<StockFinancialReport>();
     public DbSet<AlertRule> AlertRules => Set<AlertRule>();
@@ -145,6 +146,13 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
         {
             e.HasIndex(x => new { x.Code, x.Date }).IsUnique();
             e.HasIndex(x => x.Code);
+        });
+
+        b.Entity<IndexMoneyFlowDaily>(e =>
+        {
+            e.HasIndex(x => new { x.Code, x.Date }).IsUnique();
+            e.HasIndex(x => x.Code);
+            e.Property(x => x.Code).HasMaxLength(12);
         });
 
         b.Entity<StockFundamental>(e =>

@@ -448,6 +448,44 @@ namespace FundAnalysis.Migrations
                     b.ToTable("IndexIntradays");
                 });
 
+            modelBuilder.Entity("FundAnalysis.Models.IndexMoneyFlowDaily", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<double>("LargeNet")
+                        .HasColumnType("double precision");
+
+                    b.Property<double>("MainNet")
+                        .HasColumnType("double precision");
+
+                    b.Property<double>("MidNet")
+                        .HasColumnType("double precision");
+
+                    b.Property<double>("SmallNet")
+                        .HasColumnType("double precision");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code");
+
+                    b.HasIndex("Code", "Date")
+                        .IsUnique();
+
+                    b.ToTable("IndexMoneyFlows");
+                });
+
             modelBuilder.Entity("FundAnalysis.Models.LprRate", b =>
                 {
                     b.Property<long>("Id")

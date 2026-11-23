@@ -457,6 +457,7 @@ public class CollectorService(
         await SyncWatchlistDailyAsync();
         await SyncWatchlistMinutesAsync();
         await SyncSectorMoneyFlowAsync();
+        await SyncIndexMoneyFlowAsync();
     }
 
     /// <summary>行情序列日线追加（仅新增缺失日期，历史导入数据保持原值）。</summary>
@@ -603,6 +604,70 @@ public class CollectorService(
         catch (Exception ex)
         {
             logger.LogError(ex, "行业板块资金流同步失败");
+        }
+    }
+
+    /// <summary>
+    /// 定时任务：同步内置指数的每日资金流（仅沪深市场，跨境指数东财无资金流数据）。
+    /// 与指数日线一样受 push2his 频率风控影响，逐个请求且间隔 6 秒；连续 3 个失败中止本轮。
+    /// 用于指数页"市场存量资金"曲线：当日主力净额=流入-流出，累计即存量。
+    /// </summary>
+    [DisableConcurrentExecution(timeoutInSeconds: 600)]
+    [AutomaticRetry(Attempts = 3)]
+    public async Task SyncIndexMoneyFlowAsync()
+    {
+        var consecutiveFailures = 0;
+
+        foreach (var (code, name, _, market) in MarketIndices.List)
+        {
+            if (market != 0 && market != 1) continue; // 跨境指数无资金流
+
+            try
+            {
+                // 东财 fflow 接口最多返回最近 120 个交易日
+                var items = await provider.FetchMoneyFlowAsync(code, market, 120);
+                var existing = (await db.IndexMoneyFlows
+                    .Where(x => x.Code == code)
+                    .ToListAsync()).ToDictionary(x => x.Date);
+
+                var added = 0;
+                foreach (var item in items)
+                {
+                    var date = item.Date.Date;
+                    if (existing.TryGetValue(date, out var row))
+                    {
+                        row.MainNet = item.MainNet;
+                        row.LargeNet = item.LargeNet;
+                        row.MidNet = item.MidNet;
+                        row.SmallNet = item.SmallNet;
+                    }
+                    else
+                    {
+                        db.IndexMoneyFlows.Add(new IndexMoneyFlowDaily
+                        {
+                            Code = code,
+                            Date = date,
+                            MainNet = item.MainNet,
+                            LargeNet = item.LargeNet,
+                            MidNet = item.MidNet,
+                            SmallNet = item.SmallNet,
+                        });
+                        added++;
+                    }
+                }
+                await db.SaveChangesAsync();
+                logger.LogInformation("指数 {Code} {Name} 资金流同步完成，新增 {Count} 条", code, name, added);
+                consecutiveFailures = 0;
+            }
+            catch (Exception ex)
+            {
+                consecutiveFailures++;
+                logger.LogError(ex, "指数 {Code} {Name} 资金流同步失败（连续失败 {Count}）", code, name, consecutiveFailures);
+                if (consecutiveFailures >= 3)
+                    throw new InvalidOperationException("连续 3 个指数资金流同步失败，疑似触发东财 IP 频率风控，中止本轮同步");
+            }
+
+            await Task.Delay(6000);
         }
     }
 

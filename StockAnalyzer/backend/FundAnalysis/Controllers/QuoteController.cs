@@ -653,4 +653,38 @@ public class QuoteController(
 
         return Ok(new SectorFlowDto(latest.Value.ToString("yyyy-MM-dd"), items));
     }
+
+    /// <summary>
+    /// 指数每日资金流（读 IndexMoneyFlow 采集表，无实时外呼）。
+    /// Net = 当日主力净流入（流入 - 流出），Cumulative = 自序列起点累计净流入（即"市场存量资金"曲线），
+    /// 单位均为亿元，按日期升序，最多最近 120 个交易日；未采集到数据时返回空列表。
+    /// </summary>
+    [Authorize]
+    [HttpGet("index-moneyflow")]
+    public async Task<IActionResult> IndexMoneyFlow([FromQuery] string code, [FromQuery] int days = 120)
+    {
+        if (string.IsNullOrWhiteSpace(code))
+            return BadRequest(new { message = "缺少指数代码" });
+
+        var take = Math.Clamp(days, 1, 120);
+        // 从最早一条记录起累计，保证"存量"基线稳定（不随查询窗口滚动）；再截取最近 take 个交易日
+        var rows = await db.IndexMoneyFlows
+            .Where(x => x.Code == code)
+            .OrderBy(x => x.Date)
+            .ToListAsync();
+
+        var cumulative = 0d;
+        var points = new List<IndexMoneyFlowPointDto>(rows.Count);
+        foreach (var row in rows)
+        {
+            cumulative += row.MainNet;
+            points.Add(new IndexMoneyFlowPointDto(
+                row.Date.ToString("yyyy-MM-dd"),
+                Math.Round(row.MainNet / 1e8, 2),
+                Math.Round(cumulative / 1e8, 2)));
+        }
+
+        if (points.Count > take) points = points.Skip(points.Count - take).ToList();
+        return Ok(new IndexMoneyFlowDto(code, points));
+    }
 }

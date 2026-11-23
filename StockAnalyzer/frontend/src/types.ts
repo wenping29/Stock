@@ -178,6 +178,18 @@ export interface SectorFlow {
   items: SectorFlowItem[]
 }
 
+/** 指数每日资金流点：net 为当日主力净流入（流入-流出），cumulative 为累计存量，单位亿元。 */
+export interface IndexMoneyFlowPoint {
+  date: string
+  net: number
+  cumulative: number
+}
+
+export interface IndexMoneyFlow {
+  code: string
+  points: IndexMoneyFlowPoint[]
+}
+
 export interface FxPoint {
   date: string
   rate: number

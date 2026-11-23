@@ -52,6 +52,10 @@ public static class CollectorJobs
         jobs.AddOrUpdate<CollectorService>(
             "sector-flow-sync", s => s.SyncSectorMoneyFlowAsync(), "55 16 * * 1-5");
 
+        // 内置指数每日资金流（低频慢速拉取防风控）：交易日 17:30
+        jobs.AddOrUpdate<CollectorService>(
+            "index-flow-sync", s => s.SyncIndexMoneyFlowAsync(), "30 17 * * 1-5");
+
         // 自选价格提醒检查：交易时段每 5 分钟
         jobs.AddOrUpdate<AlertService>(
             "alert-check", s => s.CheckAllAsync(), "*/5 9-15 * * 1-5");

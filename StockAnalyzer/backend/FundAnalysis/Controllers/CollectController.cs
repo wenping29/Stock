@@ -30,7 +30,7 @@ public class CollectController(
     /// watchlist(自选日线) / minutes(自选分钟) / stock-list(标的清单) /
     /// liquidity(央行流动性) / fundamentals(基本面选股) / financials(自选多期财报) /
     /// financials-all(全市场多期财报，耗时约 1.5 小时) / fund-list(基金清单) /
-    /// sentiment(市场情绪) / sector(行业板块资金流) / all(全部)。
+    /// sentiment(市场情绪) / sector(行业板块资金流) / index-flow(指数资金流) / all(全部)。
     /// </remarks>
     [HttpPost("{category}")]
     public IActionResult Trigger(string category)
@@ -51,6 +51,7 @@ public class CollectController(
             "fund-list"    => backgroundJobs.Enqueue<FundService>(s => s.SyncFundListAsync()),
             "sentiment"    => backgroundJobs.Enqueue<MarketSentimentService>(s => s.SyncAsync()),
             "sector"       => backgroundJobs.Enqueue<CollectorService>(s => s.SyncSectorMoneyFlowAsync()),
+            "index-flow"   => backgroundJobs.Enqueue<CollectorService>(s => s.SyncIndexMoneyFlowAsync()),
             "all"          => backgroundJobs.Enqueue<CollectorService>(s => s.SyncAllCategoriesAsync()),
             _              => null,
         };

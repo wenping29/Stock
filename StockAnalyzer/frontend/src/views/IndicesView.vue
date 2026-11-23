@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { CustomIndexItem, CustomIndexPreset, EtfQuote, FundEstimate, FundHoldingItem, IndexEtf, IndexItem, IndexTrendData, IndexTrendPoint, KLinePoint } from '../types'
-import { fetchEtfQuote, fetchEtfTrend, fetchIndexEtfs, fetchIndices, fetchIndexTrend } from '../api/quote'
+import { fetchEtfQuote, fetchEtfTrend, fetchIndexEtfs, fetchIndexMoneyFlow, fetchIndices, fetchIndexTrend } from '../api/quote'
 import { fetchFundEstimates } from '../api/funds'
 import {
   createCustomIndex, deleteCustomIndex, fetchCustomIndexPreset, fetchCustomIndexPresets,
@@ -239,6 +239,24 @@ async function loadCnRateOverlay() {
   try { cnRateOverlay.value = await fetchCnRateHistory('CN_10Y') } catch { /* 忽略 */ }
 }
 
+// ---- 市场存量资金：所选指数的累计主力净流入（流入-流出），单位亿元 ----
+const indexFlow = ref<{ date: string; value: number }[]>([])
+let flowSeq = 0
+async function loadIndexMoneyFlow(code: string) {
+  const seq = ++flowSeq
+  try {
+    const res = await fetchIndexMoneyFlow(code)
+    if (seq !== flowSeq) return
+    indexFlow.value = res.points.map((p) => ({ date: p.date, value: p.cumulative }))
+  } catch {
+    if (seq === flowSeq) indexFlow.value = []
+  }
+}
+function clearIndexMoneyFlow() {
+  flowSeq++
+  indexFlow.value = []
+}
+
 // ---- 行情K线技术指标按钮：成交量 / MA / BOLL / MACD / RSI ----
 type IndKey = 'VOL' | 'MA' | 'BOLL' | 'MACD' | 'RSI'
 const IND_BUTTONS: { key: IndKey; label: string }[] = [
@@ -362,7 +380,10 @@ async function loadCustom() {
     // 已被删除：回到第一个内置指数
     selectedCustom.value = null
     selected.value = items.value[0] ?? null
-    if (selected.value) await loadTabData()
+    if (selected.value) {
+      loadIndexMoneyFlow(selected.value.code)
+      await loadTabData()
+    }
     return
   }
   selectedCustom.value = fresh
@@ -382,6 +403,7 @@ function select(item: IndexItem) {
   selectedCustom.value = null
   selected.value = item
   loadEtfs(item.code)
+  loadIndexMoneyFlow(item.code)
   loadTabData()
 }
 
@@ -465,6 +487,7 @@ function selectCustom(ci: CustomIndexItem) {
   selected.value = customToIndexItem(ci)
   etfs.value = []
   etfSeq++
+  clearIndexMoneyFlow()
   if (tab.value === 'intraday') tab.value = 'quote'
   if (quotePeriod.value === '60min') quotePeriod.value = 'day'
   if (period.value === '60min') period.value = 'day'
@@ -760,6 +783,7 @@ async function onCollected() {
   } else {
     await load()
     await loadTabData()
+    if (selected.value) loadIndexMoneyFlow(selected.value.code)
   }
 }
 
@@ -847,7 +871,7 @@ onMounted(() => {
             {{ PERIOD_LABELS[p] }}
           </span>
         </div>
-        <span class="chart-title">预设 1月/3月/6月/1年/全部 · 自定义起止日期 · K线 / 折线切换 · 美债/美元利率/人民币利率叠加（图表右上角可全屏）</span>
+        <span class="chart-title">预设 1月/3月/6月/1年/全部 · 自定义起止日期 · K线 / 折线切换 · 美债/美元利率/人民币利率/市场存量资金叠加（图表右上角可全屏）</span>
       </div>
 
       <!-- K 线类 Tab 的周期切换 -->
@@ -884,6 +908,7 @@ onMounted(() => {
           :usd-rate-data="usdRate"
           :cn-rate-data="cnRateOverlay"
           :money-supply-data="moneySupply"
+          :money-flow-data="indexFlow"
           @range-change="onQuoteRangeChange">
           <template #toolbar>
             <span v-for="b in IND_BUTTONS" :key="b.key"

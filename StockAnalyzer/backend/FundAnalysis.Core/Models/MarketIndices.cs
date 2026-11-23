@@ -17,6 +17,22 @@ public class IndexDaily
     public double ChangePct { get; set; }
 }
 
+/// <summary>
+/// 指数每日资金流（主力/大单/中单/小单净流入，单位：元）。
+/// 东财 fflow 接口按指数代码返回，用于指数页"市场存量资金"曲线（净流入=流入-流出，累计即存量）。
+/// Code + Date 唯一；与个股资金流表分离，避免 000001 等指数代码与股票代码冲突。
+/// </summary>
+public class IndexMoneyFlowDaily
+{
+    public long Id { get; set; }
+    public string Code { get; set; } = "";
+    public DateTime Date { get; set; }
+    public double MainNet { get; set; }
+    public double LargeNet { get; set; }
+    public double MidNet { get; set; }
+    public double SmallNet { get; set; }
+}
+
 /// <summary>系统内置指数清单（指数页展示 + 采集范围）。</summary>
 public static class MarketIndices
 {

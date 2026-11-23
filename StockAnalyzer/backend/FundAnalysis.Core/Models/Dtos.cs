@@ -138,6 +138,15 @@ public record IndexTrendPointDto(string Time, double Price, double Volume, doubl
 /// </summary>
 public record IndexTrendResponse(string Code, string Name, string Date, double PrevClose, List<IndexTrendPointDto> Points);
 
+/// <summary>
+/// 指数每日资金流点。Net 为当日主力净流入（流入-流出），Cumulative 为自序列起点累计净流入，
+/// 二者单位均为亿元（Cumulative 即"市场存量资金"曲线）。
+/// </summary>
+public record IndexMoneyFlowPointDto(string Date, double Net, double Cumulative);
+
+/// <summary>指数资金流序列（按日期升序，最多最近 120 个交易日）。</summary>
+public record IndexMoneyFlowDto(string Code, List<IndexMoneyFlowPointDto> Points);
+
 /// <summary>指数关联的场内 ETF；行情源不可用时 Price/ChangePct 为 null，Amount（成交额，元）为 0。</summary>
 public record IndexEtfItemDto(string Symbol, string Name, double? Price, double? ChangePct, double Amount);
 

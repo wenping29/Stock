@@ -16,6 +16,8 @@ const props = withDefaults(defineProps<{
   cnRateData?: { date: string; rate: number }[]
   /** 人民币货币供应量 M0/M1/M2（单位：亿元，按月） */
   moneySupplyData?: { month: string; m0: number; m1: number; m2: number }[]
+  /** 市场存量资金：累计主力净流入（流入-流出），单位亿元，按日期对齐走独立右轴 */
+  moneyFlowData?: { date: string; value: number }[]
   /** 主图下方叠加成交量柱状副图 */
   showVolume?: boolean
   height?: number
@@ -25,6 +27,7 @@ const props = withDefaults(defineProps<{
   usdRateData: () => [],
   cnRateData: () => [],
   moneySupplyData: () => [],
+  moneyFlowData: () => [],
   showVolume: false,
   height: 460,
 })
@@ -67,6 +70,7 @@ const chartType = ref<'candlestick' | 'line'>('candlestick')
 const showUsRate = ref(false)
 const showUsdRate = ref(false)
 const showCnRate = ref(false)
+const showMarketFlow = ref(false)
 
 type MoneyKey = 'M0' | 'M1' | 'M2'
 const MONEY_DEFS: { key: MoneyKey; label: string; field: 'm0' | 'm1' | 'm2'; color: string }[] = [
@@ -144,6 +148,7 @@ const hasUsdRate = computed(() => props.usdRateData.length > 0)
 const hasCnRate = computed(() => props.cnRateData.length > 0)
 
 const hasMoney = computed(() => props.moneySupplyData.length > 0)
+const hasMarketFlow = computed(() => props.moneyFlowData.length > 0)
 
 /** 月度序列按 K 线日期对齐（取不晚于该日的最近一个月值）。 */
 function alignMonthly(kline: KlineData[], points: { month: string; value: number }[]): (number | null)[] {
@@ -174,6 +179,19 @@ function alignRate(kline: KlineData[], series: { date: string; rate: number }[])
     const kd = toIsoDate(k.date)
     while (idx < sorted.length - 1 && sorted[idx + 1].date <= kd) idx++
     aligned.push(sorted[idx] && sorted[idx].date <= kd ? sorted[idx].rate : null)
+  }
+  return aligned
+}
+
+/** 资金流序列按 K 线日期对齐（取不晚于该日的最近值，累计存量呈阶梯延续）。 */
+function alignValue(kline: KlineData[], series: { date: string; value: number }[]): (number | null)[] {
+  const sorted = [...series].sort((a, b) => a.date.localeCompare(b.date))
+  const aligned: (number | null)[] = []
+  let idx = 0
+  for (const k of kline) {
+    const kd = toIsoDate(k.date)
+    while (idx < sorted.length - 1 && sorted[idx + 1].date <= kd) idx++
+    aligned.push(sorted[idx] && sorted[idx].date <= kd ? sorted[idx].value : null)
   }
   return aligned
 }
@@ -346,7 +364,25 @@ const option = computed<EChartsOption | null>(() => {
     legendData.push(`${d.label}(万亿)`)
   }
 
-  const volumeAxisIndex = 1 + (hasRateAxis ? 1 : 0) + (showMoney ? 1 : 0)
+  // 市场存量资金：所选指数累计主力净流入（流入-流出），走货币轴之后的独立右轴
+  const showFlow = showMarketFlow.value && hasMarketFlow.value
+  const flowAxisIndex = 1 + (hasRateAxis ? 1 : 0) + (showMoney ? 1 : 0)
+  if (showFlow) {
+    series.push({
+      name: '市场存量资金(亿)',
+      type: 'line',
+      yAxisIndex: flowAxisIndex,
+      data: alignValue(kline, props.moneyFlowData),
+      showSymbol: false,
+      connectNulls: false,
+      lineStyle: { width: 1.6, color: '#7e57c2' },
+      itemStyle: { color: '#7e57c2' },
+      areaStyle: { color: 'rgba(126,87,194,0.08)' },
+    })
+    legendData.push('市场存量资金(亿)')
+  }
+
+  const volumeAxisIndex = 1 + (hasRateAxis ? 1 : 0) + (showMoney ? 1 : 0) + (showFlow ? 1 : 0)
   if (props.showVolume) {
     series.push({
       name: '成交量',
@@ -360,9 +396,9 @@ const option = computed<EChartsOption | null>(() => {
     })
   }
 
-  // 利率轴与货币轴同在右侧时错开排列，避免刻度与轴名互相覆盖
-  const stackedAxes = hasRateAxis && showMoney
-  const right = stackedAxes ? 124 : hasRateAxis || showMoney ? 64 : 24
+  // 利率/货币/存量资金轴同在右侧时依次向外错开，避免刻度与轴名互相覆盖
+  const rightAxisCount = (hasRateAxis ? 1 : 0) + (showMoney ? 1 : 0) + (showFlow ? 1 : 0)
+  const right = rightAxisCount === 0 ? 24 : 64 + (rightAxisCount - 1) * 60
 
   return {
     animation: false,
@@ -429,10 +465,21 @@ const option = computed<EChartsOption | null>(() => {
         ? [{
             type: 'value' as const,
             min: 0,
-            offset: stackedAxes ? 58 : 0,
+            offset: (hasRateAxis ? 1 : 0) * 60,
             name: '货币供应 万亿',
             nameTextStyle: { fontSize: 10, color: '#606266' },
             axisLabel: { fontSize: 10, color: '#606266' },
+            splitLine: { show: false },
+          }]
+        : []),
+      ...(showFlow
+        ? [{
+            type: 'value' as const,
+            scale: true,
+            offset: ((hasRateAxis ? 1 : 0) + (showMoney ? 1 : 0)) * 60,
+            name: '存量资金 亿',
+            nameTextStyle: { fontSize: 10, color: '#7e57c2' },
+            axisLabel: { fontSize: 10, color: '#7e57c2' },
             splitLine: { show: false },
           }]
         : []),
@@ -455,7 +502,8 @@ const option = computed<EChartsOption | null>(() => {
 
 useEChart(el, () => option.value, () => [
   filtered.value, chartType.value, showUsRate.value, showUsdRate.value, showCnRate.value,
-  activeMoney.value, props.showVolume, props.moneySupplyData.length, props.cnRateData.length,
+  showMarketFlow.value, activeMoney.value, props.showVolume, props.moneySupplyData.length,
+  props.cnRateData.length, props.moneyFlowData.length,
 ])
 
 const presets: { label: string; val: number | 'all' }[] = [
@@ -507,6 +555,13 @@ const presets: { label: string; val: number | 'all' }[] = [
         title="中债 10 年期国债收益率（CN_10Y）"
         @click="showCnRate = !showCnRate"
       >人民币利率</button>
+      <button
+        v-if="hasMarketFlow"
+        class="us-toggle"
+        :class="{ active: showMarketFlow }"
+        title="所选指数累计主力净流入（流入-流出），单位亿元"
+        @click="showMarketFlow = !showMarketFlow"
+      >市场存量资金</button>
       <!-- 附加工具（如技术指标开关），排在美债/美元利率/M0·M1·M2/人民币利率 按钮之后 -->
       <slot name="toolbar" />
     </div>
