@@ -207,7 +207,8 @@ public class EastmoneyProvider(IHttpClientFactory factory) : IQuoteProvider
         // 行格式：日期,主力,小单,中单,大单,超大单,主力占比,小单占比,中单占比,大单占比,超大单占比,收盘,涨跌幅
         var url = $"https://push2his.eastmoney.com/api/qt/stock/fflow/daykline/get?lmt={days}&klt=101&fields1=f1,f2,f3,f7&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61,f62,f63,f64,f65&secid={secMarket}.{symbol}";
         using var client = NewClient();
-        using var doc = JsonDocument.Parse(await client.GetStringAsync(url, ct));
+        // 与 K 线等其他 push2his 接口保持一致：偶发 ResponseEnded 时自动重试
+        using var doc = JsonDocument.Parse(await GetWithRetryAsync(client, url, ct));
         var list = new List<MoneyFlowItem>();
         if (!doc.RootElement.TryGetProperty("data", out var data) || data.ValueKind == JsonValueKind.Null)
             return list;
