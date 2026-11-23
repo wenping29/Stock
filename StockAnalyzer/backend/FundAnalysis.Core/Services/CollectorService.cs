@@ -695,6 +695,7 @@ public class CollectorService(
             if (existing.TryGetValue(date, out var row))
             {
                 row.FinancingBalance = item.FinancingBalance;
+                row.SecuritiesLendingBalance = item.SecuritiesLendingBalance;
                 row.MarginTradingBalance = item.MarginTradingBalance;
             }
             else
@@ -703,6 +704,7 @@ public class CollectorService(
                 {
                     Date = date,
                     FinancingBalance = item.FinancingBalance,
+                    SecuritiesLendingBalance = item.SecuritiesLendingBalance,
                     MarginTradingBalance = item.MarginTradingBalance,
                 });
                 added++;

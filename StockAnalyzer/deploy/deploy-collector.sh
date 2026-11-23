@@ -14,6 +14,7 @@ SSH_KEY="$HOME/.ssh/tx.pem"
 LOCAL_COLLECTOR=""   # 由下方 ROOT_LOCAL 推导
 REMOTE_COLLECTOR="/www/wwwroot/fund/collectter"   # 服务器上既有目录名就是 collectter
 EXECUTABLE_NAME="FundAnalysis.Collector"
+CORE_NAME="FundAnalysis"                          # 共享核心程序集名为 FundAnalysis.Core.dll，不是 FundAnalysis.Collector.Core.dll
 START_ARGS="--mode=daemon"                        # 常驻模式，内部按 cron 表自调度
 # ===============================================
 
@@ -62,9 +63,9 @@ else
     "$LOCAL_COLLECTOR$EXECUTABLE_NAME.deps.json" \
     "$LOCAL_COLLECTOR$EXECUTABLE_NAME.runtimeconfig.json" \
     "$LOCAL_COLLECTOR$EXECUTABLE_NAME.pdb" \
-    "$LOCAL_COLLECTOR$EXECUTABLE_NAME.Core.dll" \
-    "$LOCAL_COLLECTOR$EXECUTABLE_NAME.Core.pdb" \
-    "$LOCAL_COLLECTOR$EXECUTABLE_NAME.Core.xml" \
+    "$LOCAL_COLLECTOR$CORE_NAME.Core.dll" \
+    "$LOCAL_COLLECTOR$CORE_NAME.Core.pdb" \
+    "$LOCAL_COLLECTOR$CORE_NAME.Core.xml" \
     "$SERVER:$REMOTE_COLLECTOR/" || echo "提示：部分文件（如 .pdb 或 .xml）可能不存在，已跳过。"
 fi
 echo "采集器上传完成"

@@ -256,8 +256,9 @@ public class EastmoneyProvider(IHttpClientFactory factory) : IQuoteProvider
             if (!DateTime.TryParse(dv.GetString(), Cn, DateTimeStyles.None, out var date)) continue;
             if (!row.TryGetProperty("RZYE", out var rz) || rz.ValueKind != JsonValueKind.Number) continue;
 
+            var rq = row.TryGetProperty("RQYE", out var q) && q.ValueKind == JsonValueKind.Number ? q.GetDouble() : 0;
             var all = row.TryGetProperty("RZRQYE", out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDouble() : 0;
-            list.Add(new MarginBalanceItem(date.Date, rz.GetDouble(), all));
+            list.Add(new MarginBalanceItem(date.Date, rz.GetDouble(), rq, all));
         }
 
         return list.OrderBy(x => x.Date).ToList();

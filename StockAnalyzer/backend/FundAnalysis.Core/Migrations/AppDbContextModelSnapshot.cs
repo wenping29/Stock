@@ -528,6 +528,9 @@ namespace FundAnalysis.Migrations
                     b.Property<double>("MarginTradingBalance")
                         .HasColumnType("double precision");
 
+                    b.Property<double>("SecuritiesLendingBalance")
+                        .HasColumnType("double precision");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Date")

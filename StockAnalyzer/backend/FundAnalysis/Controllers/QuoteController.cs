@@ -706,6 +706,7 @@ public class QuoteController(
         var points = rows.Select(x => new MarginBalancePointDto(
             x.Date.ToString("yyyy-MM-dd"),
             Math.Round(x.FinancingBalance / 1e8, 2),
+            Math.Round(x.SecuritiesLendingBalance / 1e8, 2),
             Math.Round(x.MarginTradingBalance / 1e8, 2))).ToList();
 
         return Ok(new MarginBalanceDto(points));

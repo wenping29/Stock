@@ -147,14 +147,14 @@ public record IndexMoneyFlowPointDto(string Date, double Net, double Cumulative)
 /// <summary>指数资金流序列（按日期升序，最多最近 120 个交易日）。</summary>
 public record IndexMoneyFlowDto(string Code, List<IndexMoneyFlowPointDto> Points);
 
-/// <summary>全市场两融余额点，单位亿元。FinancingBalance=融资余额，MarginTradingBalance=融资融券余额。</summary>
-public record MarginBalancePointDto(string Date, double FinancingBalance, double MarginTradingBalance);
+/// <summary>全市场两融余额点，单位亿元。FinancingBalance=融资余额，SecuritiesLendingBalance=融券余额，MarginTradingBalance=两融合计。</summary>
+public record MarginBalancePointDto(string Date, double FinancingBalance, double SecuritiesLendingBalance, double MarginTradingBalance);
 
 /// <summary>全市场两融余额序列（按日期升序）。</summary>
 public record MarginBalanceDto(List<MarginBalancePointDto> Points);
 
 /// <summary>东财两融余额原始项，单位元。</summary>
-public record MarginBalanceItem(DateTime Date, double FinancingBalance, double MarginTradingBalance);
+public record MarginBalanceItem(DateTime Date, double FinancingBalance, double SecuritiesLendingBalance, double MarginTradingBalance);
 
 /// <summary>指数关联的场内 ETF；行情源不可用时 Price/ChangePct 为 null，Amount（成交额，元）为 0。</summary>
 public record IndexEtfItemDto(string Symbol, string Name, double? Price, double? ChangePct, double Amount);

@@ -259,12 +259,15 @@ function clearIndexMoneyFlow() {
 
 // ---- 融资余额：全市场融资余额（沪深合计），单位亿元，与所选指数无关 ----
 const marginBalance = ref<{ date: string; value: number }[]>([])
+const lendingBalance = ref<{ date: string; value: number }[]>([])
 async function loadMarginBalance() {
   try {
     const res = await fetchMarginBalance()
     marginBalance.value = res.points.map((p) => ({ date: p.date, value: p.financingBalance }))
+    lendingBalance.value = res.points.map((p) => ({ date: p.date, value: p.securitiesLendingBalance }))
   } catch {
     marginBalance.value = []
+    lendingBalance.value = []
   }
 }
 
@@ -922,6 +925,7 @@ onMounted(() => {
           :money-supply-data="moneySupply"
           :money-flow-data="indexFlow"
           :margin-balance-data="marginBalance"
+          :lending-balance-data="lendingBalance"
           @range-change="onQuoteRangeChange">
           <template #toolbar>
             <span v-for="b in IND_BUTTONS" :key="b.key"
